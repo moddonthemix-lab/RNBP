@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
 import audioEngine from './audioEngine';
 import { 
@@ -17,31 +17,32 @@ const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 const CHORD_RHYTHMS = [
   { name: 'Sustained', pattern: [{ beat: 0, dur: 3.5 }] },
   { name: 'Half Notes', pattern: [{ beat: 0, dur: 1.8 }, { beat: 2, dur: 1.8 }] },
-  { name: 'R&B Pump', pattern: [{ beat: 0, dur: 0.4 }, { beat: 0.5, dur: 0.4 }, { beat: 2, dur: 1.2 }, { beat: 3.5, dur: 0.4 }] },
-  { name: 'Neo Soul Stabs', pattern: [{ beat: 0, dur: 0.3 }, { beat: 1, dur: 0.6 }, { beat: 2.5, dur: 0.3 }, { beat: 3, dur: 0.8 }] },
-  { name: 'Gospel Bounce', pattern: [{ beat: 0, dur: 0.8 }, { beat: 1.5, dur: 0.4 }, { beat: 2, dur: 0.8 }, { beat: 3.5, dur: 0.4 }] },
-  { name: 'Ballad Swell', pattern: [{ beat: 0, dur: 2.5 }, { beat: 3, dur: 0.8 }] },
-  { name: 'Syncopated', pattern: [{ beat: 0, dur: 1.2 }, { beat: 1.5, dur: 0.8 }, { beat: 2.5, dur: 1.2 }] },
+  { name: 'R&B Pump', pattern: [{ beat: 0, dur: 0.5 }, { beat: 0.75, dur: 0.5 }, { beat: 2, dur: 1.5 }] },
+  { name: 'Neo Soul Stabs', pattern: [{ beat: 0, dur: 0.4 }, { beat: 1.25, dur: 0.6 }, { beat: 2.75, dur: 0.8 }] },
+  { name: 'Gospel Bounce', pattern: [{ beat: 0, dur: 1 }, { beat: 1.5, dur: 0.5 }, { beat: 2.25, dur: 1.2 }] },
+  { name: 'Ballad Swell', pattern: [{ beat: 0, dur: 3 }] },
 ];
 
 // Bass patterns
 const BASS_PATTERNS = [
   { name: 'Root Hold', pattern: [{ beat: 0, interval: 0, dur: 3 }] },
   { name: 'Root-Fifth', pattern: [{ beat: 0, interval: 0, dur: 1.5 }, { beat: 2, interval: 7, dur: 1.5 }] },
-  { name: 'Octave Bounce', pattern: [{ beat: 0, interval: 0, dur: 0.5 }, { beat: 0.75, interval: 12, dur: 0.5 }, { beat: 2, interval: 0, dur: 0.5 }, { beat: 2.75, interval: 12, dur: 0.5 }] },
-  { name: 'Walking', pattern: [{ beat: 0, interval: 0, dur: 0.8 }, { beat: 1, interval: 4, dur: 0.8 }, { beat: 2, interval: 7, dur: 0.8 }, { beat: 3, interval: 5, dur: 0.8 }] },
-  { name: 'Syncopated', pattern: [{ beat: 0, interval: 0, dur: 1 }, { beat: 1.5, interval: 0, dur: 0.4 }, { beat: 2.5, interval: 7, dur: 1 }] },
-  { name: 'Trap 808', pattern: [{ beat: 0, interval: 0, dur: 2 }, { beat: 2.5, interval: 0, dur: 0.3 }, { beat: 3, interval: -5, dur: 0.8 }] },
+  { name: 'Octave Bounce', pattern: [{ beat: 0, interval: 0, dur: 0.8 }, { beat: 1, interval: 12, dur: 0.8 }, { beat: 2, interval: 0, dur: 0.8 }, { beat: 3, interval: 12, dur: 0.8 }] },
+  { name: 'Walking', pattern: [{ beat: 0, interval: 0, dur: 0.9 }, { beat: 1, interval: 3, dur: 0.9 }, { beat: 2, interval: 5, dur: 0.9 }, { beat: 3, interval: 7, dur: 0.9 }] },
+  { name: 'Syncopated', pattern: [{ beat: 0, interval: 0, dur: 1.2 }, { beat: 1.5, interval: 0, dur: 0.5 }, { beat: 2.5, interval: 7, dur: 1.2 }] },
 ];
+
+// Transpose MIDI notes
+const transposeMidi = (notes, semitones) => notes.map(n => n + semitones);
 
 export default function App() {
   // State
   const [selectedArtist, setSelectedArtist] = useState('sza');
   const [selectedProgIndex, setSelectedProgIndex] = useState(0);
-  const [transpose, setTranspose] = useState(0);
+  const [keyTranspose, setKeyTranspose] = useState(0); // Key transposition
   const [bpm, setBpm] = useState(82);
-  const [swing, setSwing] = useState(0.15);
-  const [reverbAmount, setReverbAmount] = useState(0.3);
+  const [swing, setSwing] = useState(0.12);
+  const [reverbAmount, setReverbAmount] = useState(0.25);
   
   // Generated variations
   const [variations, setVariations] = useState([]);
@@ -53,6 +54,7 @@ export default function App() {
     rhodes: true,
     wurli: false,
     pad: false,
+    strings: false,
     guitar: false,
     bass: true,
     melody: true,
@@ -64,6 +66,8 @@ export default function App() {
   const [currentChordIdx, setCurrentChordIdx] = useState(-1);
   const [audioReady, setAudioReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const playbackRef = useRef(null);
 
   // Get current artist and progression
   const currentArtist = ARTIST_PROGRESSIONS[selectedArtist];
@@ -79,17 +83,16 @@ export default function App() {
       const variation = {
         id: `${Date.now()}-${v}`,
         name: `Version ${v + 1}`,
-        tempo: random(70, 95),
-        swing: randomFloat(0.08, 0.22),
+        tempo: random(72, 92),
+        swing: randomFloat(0.08, 0.18),
         chordRhythm: randomChoice(CHORD_RHYTHMS),
         bassPattern: randomChoice(BASS_PATTERNS),
-        instrument: randomChoice(['rhodes', 'wurli', 'rhodes']),
-        velocity: random(70, 95) / 100,
+        velocity: random(75, 90) / 100,
         chords: []
       };
       
       // Process each chord in the progression
-      currentProg.chords.forEach((chordName, i) => {
+      currentProg.chords.forEach((chordName) => {
         const chordData = getChordMidi(chordName);
         
         variation.chords.push({
@@ -98,8 +101,6 @@ export default function App() {
           rh: chordData.rh,
           all: chordData.all,
           color: chordData.color,
-          // Add variation - sometimes add extensions
-          extended: Math.random() > 0.7
         });
       });
       
@@ -131,14 +132,30 @@ export default function App() {
 
   const currentVar = variations[selectedVariation];
 
+  // Get transposed chord
+  const getTransposedChord = (chord) => ({
+    ...chord,
+    lh: transposeMidi(chord.lh, keyTranspose),
+    rh: transposeMidi(chord.rh, keyTranspose),
+    all: transposeMidi(chord.all, keyTranspose)
+  });
+
+  // Stop playback
+  const stopPlayback = useCallback(() => {
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+    }
+    audioEngine.stopAll();
+    Tone.Transport.stop();
+    Tone.Transport.cancel();
+    setIsPlaying(false);
+    setCurrentChordIdx(-1);
+  }, []);
+
   // Play/Stop
   const togglePlay = useCallback(async () => {
     if (isPlaying) {
-      audioEngine.stopAll();
-      Tone.Transport.stop();
-      Tone.Transport.cancel();
-      setIsPlaying(false);
-      setCurrentChordIdx(-1);
+      stopPlayback();
       return;
     }
 
@@ -150,18 +167,20 @@ export default function App() {
     const beatsPerChord = 4;
     const totalBeats = currentVar.chords.length * beatsPerChord;
     const usedSwing = currentVar.swing || swing;
+    const usedBpm = currentVar.tempo || bpm;
     
-    audioEngine.setBPM(currentVar.tempo || bpm);
+    audioEngine.setBPM(usedBpm);
     audioEngine.setReverb(reverbAmount);
     
     Tone.Transport.cancel();
+    Tone.Transport.bpm.value = usedBpm;
     
     const drumPattern = DRUM_PATTERNS.trapSoul;
     const chordRhythm = currentVar.chordRhythm;
     const bassPattern = currentVar.bassPattern;
-    const pianoInst = instruments.wurli ? 'wurli' : 'rhodes';
 
     currentVar.chords.forEach((chord, chordIdx) => {
+      const transposedChord = getTransposedChord(chord);
       const startBeat = chordIdx * beatsPerChord;
       
       // Visual update
@@ -169,67 +188,80 @@ export default function App() {
         Tone.Draw.schedule(() => setCurrentChordIdx(chordIdx), time);
       }, `${startBeat}:0:0`);
 
-      // CHORDS - Using split hand voicing for realism
-      if (instruments.rhodes || instruments.wurli) {
+      // RHODES
+      if (instruments.rhodes) {
         chordRhythm.pattern.forEach(hit => {
-          const beatTime = startBeat + hit.beat;
-          const swingOffset = hit.beat % 1 > 0.3 ? usedSwing * 0.2 : 0;
-          
           Tone.Transport.schedule((time) => {
-            // Play left hand (bass notes) and right hand (chord) separately
             audioEngine.playChordSplit(
-              chord.lh,
-              chord.rh,
-              `${hit.dur}n`,
-              pianoInst,
-              time + (Math.random() - 0.5) * 0.01, // Humanize
-              currentVar.velocity * (0.9 + Math.random() * 0.2)
+              transposedChord.lh,
+              transposedChord.rh,
+              hit.dur,
+              'rhodes',
+              time,
+              currentVar.velocity
             );
-          }, `${Math.floor(beatTime)}:${((beatTime % 1) + swingOffset) * 4}:0`);
+          }, `${startBeat + Math.floor(hit.beat)}:${(hit.beat % 1) * 4}:0`);
+        });
+      }
+
+      // WURLITZER
+      if (instruments.wurli) {
+        chordRhythm.pattern.forEach(hit => {
+          Tone.Transport.schedule((time) => {
+            audioEngine.playChordSplit(
+              transposedChord.lh,
+              transposedChord.rh,
+              hit.dur,
+              'wurli',
+              time,
+              currentVar.velocity * 0.9
+            );
+          }, `${startBeat + Math.floor(hit.beat)}:${(hit.beat % 1) * 4}:0`);
         });
       }
 
       // PAD
       if (instruments.pad) {
         Tone.Transport.schedule((time) => {
-          audioEngine.playChord(chord.rh.map(n => n + 12), '1m', 'pad', time, 0.4);
+          audioEngine.playChord(transposedChord.rh.map(n => n + 12), 3.5, 'pad', time, 0.35);
+        }, `${startBeat}:0:0`);
+      }
+
+      // STRINGS
+      if (instruments.strings) {
+        Tone.Transport.schedule((time) => {
+          audioEngine.playChord(transposedChord.rh, 3.5, 'strings', time, 0.3);
         }, `${startBeat}:0:0`);
       }
 
       // GUITAR - Arpeggiate
       if (instruments.guitar) {
-        const arpNotes = [...chord.rh].sort(() => Math.random() - 0.5);
-        arpNotes.forEach((note, i) => {
+        transposedChord.rh.forEach((note, i) => {
           Tone.Transport.schedule((time) => {
-            audioEngine.playNote(note, '4n', 'pluck', time, 0.6);
-          }, `${startBeat}:${i * 0.4}:0`);
+            audioEngine.playNote(note, 1.5, 'pluck', time, 0.5);
+          }, `${startBeat}:${i * 0.5}:0`);
         });
       }
 
       // BASS
       if (instruments.bass) {
-        const bassRoot = chord.lh[0]; // Use left hand root
+        const bassRoot = transposedChord.lh[0];
         bassPattern.pattern.forEach(hit => {
-          const beatTime = startBeat + hit.beat;
-          const note = bassRoot + hit.interval;
-          
           Tone.Transport.schedule((time) => {
-            audioEngine.playBass(note, `${hit.dur}n`, time + (Math.random() - 0.5) * 0.008);
-          }, `${Math.floor(beatTime)}:${(beatTime % 1) * 4}:0`);
+            audioEngine.playBass(bassRoot + hit.interval, hit.dur, time, true);
+          }, `${startBeat + Math.floor(hit.beat)}:${(hit.beat % 1) * 4}:0`);
         });
       }
 
-      // MELODY - Generate simple melody from chord tones
+      // MELODY
       if (instruments.melody) {
-        const melodyNotes = [...chord.rh, chord.rh[0] + 12].sort(() => Math.random() - 0.5).slice(0, 4);
-        const melodyTimes = [0, 0.5, 1.5, 2.5].map(t => t + (Math.random() - 0.5) * 0.2);
-        
-        melodyNotes.forEach((note, i) => {
-          if (Math.random() > 0.3) { // Don't play every note
-            const swingTime = i % 2 === 1 ? usedSwing : 0;
+        const melodyNotes = transposedChord.rh;
+        [0, 1, 2, 2.5].forEach((beatOffset, i) => {
+          if (i < melodyNotes.length && Math.random() > 0.25) {
+            const swingOffset = i % 2 === 1 ? usedSwing : 0;
             Tone.Transport.schedule((time) => {
-              audioEngine.playNote(note + 12, '8n', 'lead', time, 0.5 + Math.random() * 0.2);
-            }, `${startBeat + Math.floor(melodyTimes[i])}:${((melodyTimes[i] % 1) + swingTime) * 4}:0`);
+              audioEngine.playNote(melodyNotes[i % melodyNotes.length] + 12, 0.5, 'lead', time, 0.5);
+            }, `${startBeat + Math.floor(beatOffset + swingOffset)}:${((beatOffset + swingOffset) % 1) * 4}:0`);
           }
         });
       }
@@ -239,7 +271,7 @@ export default function App() {
         drumPattern.kick.forEach(k => {
           if (k < beatsPerChord) {
             Tone.Transport.schedule((time) => {
-              audioEngine.playDrum('kick', time + (Math.random() - 0.5) * 0.005);
+              audioEngine.playDrum('kick', time, 1);
             }, `${startBeat + Math.floor(k)}:${(k % 1) * 4}:0`);
           }
         });
@@ -247,120 +279,210 @@ export default function App() {
         drumPattern.snare.forEach(s => {
           if (s < beatsPerChord) {
             Tone.Transport.schedule((time) => {
-              audioEngine.playDrum('snare', time + (Math.random() - 0.5) * 0.008);
-            }, `${startBeat + s}:0:0`);
+              audioEngine.playDrum('snare', time, 0.9);
+            }, `${startBeat + Math.floor(s)}:${(s % 1) * 4}:0`);
           }
         });
         
         drumPattern.hihat.forEach(h => {
           if (h < beatsPerChord) {
-            const swingHat = h % 0.5 > 0.2 ? usedSwing * 0.4 : 0;
+            const swingHat = (h * 2) % 2 === 1 ? usedSwing * 0.3 : 0;
             Tone.Transport.schedule((time) => {
-              audioEngine.playDrum('hihat', time);
-            }, `${startBeat + Math.floor(h)}:${((h % 1) + swingHat) * 4}:0`);
+              audioEngine.playDrum('hihat', time, 0.6);
+            }, `${startBeat + Math.floor(h + swingHat)}:${((h + swingHat) % 1) * 4}:0`);
           }
         });
         
-        drumPattern.openHat?.forEach(h => {
-          if (h < beatsPerChord) {
-            Tone.Transport.schedule((time) => {
-              audioEngine.playDrum('openHat', time);
-            }, `${startBeat + Math.floor(h)}:${(h % 1) * 4}:0`);
-          }
-        });
+        if (drumPattern.openHat) {
+          drumPattern.openHat.forEach(h => {
+            if (h < beatsPerChord) {
+              Tone.Transport.schedule((time) => {
+                audioEngine.playDrum('openHat', time, 0.5);
+              }, `${startBeat + Math.floor(h)}:${(h % 1) * 4}:0`);
+            }
+          });
+        }
       }
     });
 
-    // End
-    Tone.Transport.schedule(() => {
-      Tone.Transport.stop();
-      setIsPlaying(false);
-      setCurrentChordIdx(-1);
-    }, `${totalBeats}:0:0`);
+    // Schedule end
+    const totalMs = (totalBeats / usedBpm) * 60 * 1000 + 500;
+    playbackRef.current = setTimeout(() => {
+      stopPlayback();
+    }, totalMs);
 
     Tone.Transport.start();
-  }, [isPlaying, audioReady, currentVar, bpm, swing, instruments, reverbAmount]);
+  }, [isPlaying, audioReady, currentVar, bpm, swing, instruments, reverbAmount, keyTranspose, stopPlayback]);
 
-  // Export MIDI
+  // MIDI Export functions for each instrument
   const exportMidi = useCallback((type) => {
     if (!currentVar) return;
     
     const beatsPerChord = 4;
     let notes = [];
+    const chordRhythm = currentVar.chordRhythm;
+    const bassPattern = currentVar.bassPattern;
+    const drumPattern = DRUM_PATTERNS.trapSoul;
     
-    if (type === 'chords' || type === 'full') {
+    // Helper to add chord notes
+    const addChordNotes = (channel) => {
       currentVar.chords.forEach((chord, idx) => {
+        const transposed = getTransposedChord(chord);
         const startBeat = idx * beatsPerChord;
         
-        currentVar.chordRhythm.pattern.forEach(hit => {
-          [...chord.lh, ...chord.rh].forEach(note => {
+        chordRhythm.pattern.forEach(hit => {
+          [...transposed.lh, ...transposed.rh].forEach(note => {
             notes.push({
-              note,
-              start: startBeat + hit.beat,
-              duration: hit.dur,
-              velocity: 80 + random(-10, 10),
-              channel: 0
+              note, start: startBeat + hit.beat, duration: hit.dur,
+              velocity: 80 + random(-8, 8), channel
             });
           });
         });
       });
-    }
-    
-    if (type === 'bass' || type === 'full') {
+    };
+
+    // Helper to add pad/strings notes
+    const addPadNotes = (channel, octaveShift = 0) => {
       currentVar.chords.forEach((chord, idx) => {
+        const transposed = getTransposedChord(chord);
         const startBeat = idx * beatsPerChord;
-        const bassRoot = chord.lh[0];
         
-        currentVar.bassPattern.pattern.forEach(hit => {
+        transposed.rh.forEach(note => {
           notes.push({
-            note: bassRoot + hit.interval,
-            start: startBeat + hit.beat,
-            duration: hit.dur,
-            velocity: 90 + random(-10, 10),
-            channel: 1
+            note: note + octaveShift, start: startBeat, duration: 3.5,
+            velocity: 70, channel
           });
         });
       });
-    }
-    
-    if (type === 'drums' || type === 'full') {
-      const pattern = DRUM_PATTERNS.trapSoul;
+    };
+
+    // Helper to add bass notes
+    const addBassNotes = (channel) => {
+      currentVar.chords.forEach((chord, idx) => {
+        const transposed = getTransposedChord(chord);
+        const startBeat = idx * beatsPerChord;
+        const bassRoot = transposed.lh[0];
+        
+        bassPattern.pattern.forEach(hit => {
+          notes.push({
+            note: bassRoot + hit.interval, start: startBeat + hit.beat, duration: hit.dur,
+            velocity: 95 + random(-5, 5), channel
+          });
+        });
+      });
+    };
+
+    // Helper to add melody notes
+    const addMelodyNotes = (channel) => {
+      currentVar.chords.forEach((chord, idx) => {
+        const transposed = getTransposedChord(chord);
+        const startBeat = idx * beatsPerChord;
+        
+        [0, 0.5, 1.5, 2.5].forEach((beatOffset, i) => {
+          if (i < transposed.rh.length) {
+            notes.push({
+              note: transposed.rh[i % transposed.rh.length] + 12,
+              start: startBeat + beatOffset, duration: 0.5,
+              velocity: 85 + random(-10, 10), channel
+            });
+          }
+        });
+      });
+    };
+
+    // Helper to add drum notes
+    const addDrumNotes = () => {
       currentVar.chords.forEach((_, idx) => {
         const startBeat = idx * beatsPerChord;
         
-        pattern.kick.forEach(k => {
+        drumPattern.kick.forEach(k => {
           if (k < beatsPerChord) {
             notes.push({ note: 36, start: startBeat + k, duration: 0.25, velocity: 100, channel: 9 });
           }
         });
-        pattern.snare.forEach(s => {
+        drumPattern.snare.forEach(s => {
           if (s < beatsPerChord) {
-            notes.push({ note: 38, start: startBeat + s, duration: 0.25, velocity: 90, channel: 9 });
+            notes.push({ note: 38, start: startBeat + s, duration: 0.2, velocity: 90, channel: 9 });
           }
         });
-        pattern.hihat.forEach(h => {
+        drumPattern.hihat.forEach(h => {
           if (h < beatsPerChord) {
-            notes.push({ note: 42, start: startBeat + h, duration: 0.1, velocity: 60, channel: 9 });
+            notes.push({ note: 42, start: startBeat + h, duration: 0.1, velocity: 65, channel: 9 });
           }
         });
+        if (drumPattern.openHat) {
+          drumPattern.openHat.forEach(h => {
+            if (h < beatsPerChord) {
+              notes.push({ note: 46, start: startBeat + h, duration: 0.2, velocity: 60, channel: 9 });
+            }
+          });
+        }
       });
+    };
+
+    // Add notes based on type
+    switch (type) {
+      case 'rhodes':
+      case 'wurli':
+      case 'chords':
+        addChordNotes(0);
+        break;
+      case 'pad':
+        addPadNotes(1, 12);
+        break;
+      case 'strings':
+        addPadNotes(2, 0);
+        break;
+      case 'guitar':
+        // Arpeggiated
+        currentVar.chords.forEach((chord, idx) => {
+          const transposed = getTransposedChord(chord);
+          const startBeat = idx * beatsPerChord;
+          transposed.rh.forEach((note, i) => {
+            notes.push({
+              note, start: startBeat + i * 0.5, duration: 1.5,
+              velocity: 75, channel: 3
+            });
+          });
+        });
+        break;
+      case 'bass':
+        addBassNotes(4);
+        break;
+      case 'melody':
+        addMelodyNotes(5);
+        break;
+      case 'drums':
+        addDrumNotes();
+        break;
+      case 'full':
+        addChordNotes(0);
+        addPadNotes(1, 12);
+        addBassNotes(2);
+        addMelodyNotes(3);
+        addDrumNotes();
+        break;
     }
     
-    const midiData = createMidiFile(notes, currentVar.tempo || bpm, `rnb_${type}`);
-    downloadMidi(midiData, `rnb_${selectedArtist}_${type}_v${selectedVariation + 1}.mid`);
-  }, [currentVar, bpm, selectedArtist, selectedVariation]);
+    const keyName = NOTES[(keyTranspose + 12) % 12] || 'C';
+    const midiData = createMidiFile(notes, currentVar.tempo || bpm, `rnb_${type}_${keyName}`);
+    downloadMidi(midiData, `rnb_${selectedArtist}_${type}_${keyName}_v${selectedVariation + 1}.mid`);
+  }, [currentVar, bpm, selectedArtist, selectedVariation, keyTranspose]);
 
   const toggleInst = (key) => setInstruments(prev => ({ ...prev, [key]: !prev[key] }));
+
+  // Get display key name
+  const displayKey = NOTES[(keyTranspose + 12) % 12] || 'C';
 
   return (
     <div style={{ padding: '24px', maxWidth: '1400px', margin: '0 auto', minHeight: '100vh' }}>
       {/* Background */}
-      <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139,92,246,0.15), transparent)', pointerEvents: 'none', zIndex: 0 }} />
-      <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse 60% 40% at 80% 100%, rgba(236,72,153,0.1), transparent)', pointerEvents: 'none', zIndex: 0 }} />
+      <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(139,92,246,0.12), transparent)', pointerEvents: 'none', zIndex: 0 }} />
+      <div style={{ position: 'fixed', inset: 0, background: 'radial-gradient(ellipse 60% 40% at 80% 100%, rgba(236,72,153,0.08), transparent)', pointerEvents: 'none', zIndex: 0 }} />
 
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Header */}
-        <header style={{ textAlign: 'center', marginBottom: '28px' }}>
+        <header style={{ textAlign: 'center', marginBottom: '24px' }}>
           <h1 style={{
             fontSize: 'clamp(1.8rem, 4vw, 3rem)', fontWeight: 300, margin: 0,
             background: 'linear-gradient(135deg, #c084fc 0%, #f472b6 50%, #fb923c 100%)',
@@ -368,41 +490,59 @@ export default function App() {
           }}>
             R&B Producer Pro
           </h1>
-          <p style={{ fontSize: '0.85rem', color: 'rgba(232,228,240,0.5)', marginTop: '6px' }}>
-            Real Voicings • Artist-Specific Chords • Professional Sound
+          <p style={{ fontSize: '0.8rem', color: 'rgba(232,228,240,0.5)', marginTop: '6px' }}>
+            Real Voicings • Artist Progressions • Full MIDI Export
           </p>
           
           {!audioReady && (
             <button onClick={initAudio} disabled={isLoading} style={enableBtn}>
-              {isLoading ? 'Loading...' : '🎹 Enable Audio'}
+              {isLoading ? 'Loading Instruments...' : '🎹 Enable Audio'}
             </button>
           )}
         </header>
 
         {/* Artist Selection */}
-        <div style={{ ...panel, marginBottom: '16px' }}>
-          <h3 style={label}>Select Artist Style</h3>
+        <div style={{ ...panel, marginBottom: '14px' }}>
+          <h3 style={label}>Artist Style</h3>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {Object.entries(ARTIST_PROGRESSIONS).map(([key, artist]) => (
               <button key={key} onClick={() => { setSelectedArtist(key); setSelectedProgIndex(0); }}
                 style={{
                   ...artistBtn,
-                  background: selectedArtist === key ? `${artist.color}30` : 'rgba(255,255,255,0.03)',
+                  background: selectedArtist === key ? `${artist.color}25` : 'rgba(255,255,255,0.02)',
                   borderColor: selectedArtist === key ? artist.color : 'rgba(255,255,255,0.08)',
-                  color: selectedArtist === key ? '#fff' : 'rgba(232,228,240,0.6)'
+                  color: selectedArtist === key ? '#fff' : 'rgba(232,228,240,0.5)'
                 }}>
-                <div style={{ fontWeight: 600 }}>{artist.name}</div>
-                <div style={{ fontSize: '0.65rem', opacity: 0.6 }}>{artist.description}</div>
+                <div style={{ fontWeight: 600, fontSize: '0.8rem' }}>{artist.name}</div>
+                <div style={{ fontSize: '0.6rem', opacity: 0.5 }}>{artist.description}</div>
               </button>
             ))}
           </div>
         </div>
 
         {/* Main Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr 1fr', gap: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '280px 1fr 240px', gap: '14px', marginBottom: '14px' }}>
           {/* Settings */}
           <div style={panel}>
             <h3 style={label}>Settings</h3>
+            
+            {/* KEY SELECTOR */}
+            <div style={{ marginBottom: '14px' }}>
+              <div style={sliderLabel}>Key: <span style={{ color: '#c084fc', fontWeight: 600 }}>{displayKey}</span></div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+                {NOTES.map((note, i) => (
+                  <button key={note} onClick={() => setKeyTranspose(i)}
+                    style={{
+                      width: '30px', height: '28px', borderRadius: '5px', border: 'none',
+                      background: keyTranspose === i ? 'linear-gradient(135deg, #8b5cf6, #ec4899)' : 'rgba(255,255,255,0.05)',
+                      color: keyTranspose === i ? '#fff' : 'rgba(232,228,240,0.5)',
+                      cursor: 'pointer', fontSize: '0.7rem', fontWeight: 500
+                    }}>
+                    {note}
+                  </button>
+                ))}
+              </div>
+            </div>
             
             <div style={{ marginBottom: '12px' }}>
               <div style={sliderLabel}>Tempo: <span style={{ color: '#f472b6' }}>{bpm} BPM</span></div>
@@ -411,29 +551,29 @@ export default function App() {
             
             <div style={{ marginBottom: '12px' }}>
               <div style={sliderLabel}>Swing: <span style={{ color: '#fb923c' }}>{Math.round(swing * 100)}%</span></div>
-              <input type="range" min="0" max="0.35" step="0.01" value={swing} onChange={e => setSwing(+e.target.value)} style={{ width: '100%' }} />
+              <input type="range" min="0" max="0.3" step="0.01" value={swing} onChange={e => setSwing(+e.target.value)} style={{ width: '100%' }} />
             </div>
             
-            <div style={{ marginBottom: '12px' }}>
+            <div>
               <div style={sliderLabel}>Reverb: <span style={{ color: '#22d3ee' }}>{Math.round(reverbAmount * 100)}%</span></div>
-              <input type="range" min="0" max="0.6" step="0.05" value={reverbAmount} onChange={e => setReverbAmount(+e.target.value)} style={{ width: '100%' }} />
+              <input type="range" min="0" max="0.5" step="0.05" value={reverbAmount} onChange={e => setReverbAmount(+e.target.value)} style={{ width: '100%' }} />
             </div>
           </div>
 
           {/* Progressions */}
           <div style={panel}>
             <h3 style={label}>{currentArtist?.name} Progressions</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', maxHeight: '220px', overflowY: 'auto' }}>
               {currentArtist?.progressions.map((prog, i) => (
                 <button key={prog.name} onClick={() => setSelectedProgIndex(i)}
                   style={{
                     ...progBtn,
-                    background: selectedProgIndex === i ? `${currentArtist.color}25` : 'rgba(255,255,255,0.02)',
-                    borderColor: selectedProgIndex === i ? `${currentArtist.color}60` : 'transparent'
+                    background: selectedProgIndex === i ? `${currentArtist.color}20` : 'rgba(255,255,255,0.02)',
+                    borderColor: selectedProgIndex === i ? `${currentArtist.color}50` : 'transparent'
                   }}>
                   <div style={{ fontWeight: 600, fontSize: '0.8rem', marginBottom: '2px' }}>{prog.name}</div>
-                  <div style={{ fontSize: '0.65rem', opacity: 0.5 }}>{prog.description}</div>
-                  <div style={{ fontSize: '0.6rem', color: currentArtist.color, marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.6rem', opacity: 0.5, marginBottom: '4px' }}>{prog.description}</div>
+                  <div style={{ fontSize: '0.6rem', color: currentArtist.color }}>
                     {prog.chords.join(' → ')}
                   </div>
                 </button>
@@ -441,25 +581,25 @@ export default function App() {
             </div>
           </div>
 
-          {/* Info */}
+          {/* Variation Info */}
           <div style={panel}>
             <h3 style={label}>Current Variation</h3>
             {currentVar && (
-              <div style={{ fontSize: '0.75rem', color: 'rgba(232,228,240,0.5)', lineHeight: 1.8 }}>
+              <div style={{ fontSize: '0.72rem', color: 'rgba(232,228,240,0.5)', lineHeight: 1.9 }}>
+                <div>Key: <span style={{ color: '#c084fc' }}>{displayKey}</span></div>
                 <div>Tempo: <span style={{ color: '#f472b6' }}>{currentVar.tempo} BPM</span></div>
                 <div>Swing: <span style={{ color: '#fb923c' }}>{Math.round(currentVar.swing * 100)}%</span></div>
-                <div>Chord Rhythm: <span style={{ color: '#c084fc' }}>{currentVar.chordRhythm.name}</span></div>
-                <div>Bass Pattern: <span style={{ color: '#22c55e' }}>{currentVar.bassPattern.name}</span></div>
-                <div>Piano: <span style={{ color: '#6366f1' }}>{currentVar.instrument}</span></div>
+                <div>Chords: <span style={{ color: '#8b5cf6' }}>{currentVar.chordRhythm.name}</span></div>
+                <div>Bass: <span style={{ color: '#22c55e' }}>{currentVar.bassPattern.name}</span></div>
               </div>
             )}
           </div>
         </div>
 
         {/* Variations */}
-        <div style={{ ...panel, marginBottom: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ ...label, margin: 0 }}>Generated Variations <span style={{ fontSize: '0.6rem', opacity: 0.4 }}>(#{genCount})</span></h3>
+        <div style={{ ...panel, marginBottom: '14px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+            <h3 style={{ ...label, margin: 0 }}>Variations <span style={{ opacity: 0.4 }}>(#{genCount})</span></h3>
             <button onClick={generateVariations} style={regenBtn}>🎲 Regenerate</button>
           </div>
           
@@ -468,11 +608,11 @@ export default function App() {
               <button key={v.id} onClick={() => setSelectedVariation(i)}
                 style={{
                   ...varBtn,
-                  background: selectedVariation === i ? 'linear-gradient(135deg, rgba(139,92,246,0.3), rgba(236,72,153,0.2))' : 'rgba(255,255,255,0.02)',
+                  background: selectedVariation === i ? 'linear-gradient(135deg, rgba(139,92,246,0.25), rgba(236,72,153,0.15))' : 'rgba(255,255,255,0.02)',
                   borderColor: selectedVariation === i ? 'rgba(139,92,246,0.5)' : 'rgba(255,255,255,0.05)'
                 }}>
-                <div style={{ fontWeight: 600, marginBottom: '4px' }}>{v.name}</div>
-                <div style={{ fontSize: '0.65rem', opacity: 0.5 }}>{v.tempo} BPM</div>
+                <div style={{ fontWeight: 600, marginBottom: '3px' }}>{v.name}</div>
+                <div style={{ fontSize: '0.6rem', opacity: 0.5 }}>{v.tempo} BPM</div>
                 <div style={{ fontSize: '0.55rem', opacity: 0.4 }}>{v.chordRhythm.name}</div>
               </button>
             ))}
@@ -480,13 +620,14 @@ export default function App() {
         </div>
 
         {/* Instruments */}
-        <div style={{ ...panel, marginBottom: '16px' }}>
-          <h3 style={{ ...label, marginBottom: '12px' }}>Instruments</h3>
+        <div style={{ ...panel, marginBottom: '14px' }}>
+          <h3 style={{ ...label, marginBottom: '10px' }}>Instruments</h3>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {[
               { key: 'rhodes', label: '🎹 Rhodes', color: '#8b5cf6' },
-              { key: 'wurli', label: '🎹 Wurlitzer', color: '#6366f1' },
+              { key: 'wurli', label: '🎹 Wurli', color: '#7c3aed' },
               { key: 'pad', label: '🎛️ Pad', color: '#14b8a6' },
+              { key: 'strings', label: '🎻 Strings', color: '#06b6d4' },
               { key: 'guitar', label: '🎸 Guitar', color: '#22c55e' },
               { key: 'bass', label: '🎸 Bass', color: '#f97316' },
               { key: 'melody', label: '🎵 Melody', color: '#ec4899' },
@@ -496,8 +637,8 @@ export default function App() {
                 style={{
                   ...instBtn,
                   borderColor: instruments[inst.key] ? inst.color : 'rgba(255,255,255,0.08)',
-                  background: instruments[inst.key] ? `${inst.color}15` : 'transparent',
-                  color: instruments[inst.key] ? inst.color : 'rgba(232,228,240,0.4)'
+                  background: instruments[inst.key] ? `${inst.color}12` : 'transparent',
+                  color: instruments[inst.key] ? inst.color : 'rgba(232,228,240,0.35)'
                 }}>
                 {inst.label}
               </button>
@@ -507,32 +648,35 @@ export default function App() {
 
         {/* Chord Display */}
         {currentVar && (
-          <div style={{ ...panel, padding: '24px', marginBottom: '16px' }}>
-            <h3 style={{ ...label, textAlign: 'center', marginBottom: '16px' }}>
-              {currentProg?.name} — {currentVar.name}
+          <div style={{ ...panel, padding: '20px', marginBottom: '14px' }}>
+            <h3 style={{ ...label, textAlign: 'center', marginBottom: '14px' }}>
+              {currentProg?.name} in {displayKey} — {currentVar.name}
             </h3>
             
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${currentVar.chords.length}, 1fr)`, gap: '12px', marginBottom: '24px' }}>
-              {currentVar.chords.map((chord, i) => (
-                <div key={i} className={currentChordIdx === i ? 'playing' : ''}
-                  style={{
-                    padding: '16px 12px',
-                    borderRadius: '12px',
-                    background: currentChordIdx === i ? `${chord.color}35` : 'rgba(255,255,255,0.02)',
-                    border: currentChordIdx === i ? `2px solid ${chord.color}` : '2px solid transparent',
-                    textAlign: 'center',
-                    transition: 'all 0.15s',
-                    transform: currentChordIdx === i ? 'scale(1.04)' : 'scale(1)'
-                  }}>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 600, color: chord.color, marginBottom: '6px' }}>
-                    {chord.name}
+            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${currentVar.chords.length}, 1fr)`, gap: '10px', marginBottom: '20px' }}>
+              {currentVar.chords.map((chord, i) => {
+                const transposed = getTransposedChord(chord);
+                return (
+                  <div key={i} className={currentChordIdx === i ? 'playing' : ''}
+                    style={{
+                      padding: '14px 10px',
+                      borderRadius: '10px',
+                      background: currentChordIdx === i ? `${chord.color}30` : 'rgba(255,255,255,0.02)',
+                      border: currentChordIdx === i ? `2px solid ${chord.color}` : '2px solid transparent',
+                      textAlign: 'center',
+                      transition: 'all 0.12s',
+                      transform: currentChordIdx === i ? 'scale(1.03)' : 'scale(1)'
+                    }}>
+                    <div style={{ fontSize: '1.4rem', fontWeight: 600, color: chord.color, marginBottom: '4px' }}>
+                      {chord.name}
+                    </div>
+                    <div style={{ fontSize: '0.55rem', color: 'rgba(232,228,240,0.3)', fontFamily: 'monospace' }}>
+                      <div>LH: {transposed.lh.map(n => NOTES[n % 12]).join(' ')}</div>
+                      <div>RH: {transposed.rh.map(n => NOTES[n % 12]).join(' ')}</div>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.6rem', color: 'rgba(232,228,240,0.3)', fontFamily: 'monospace' }}>
-                    <div>LH: {chord.lh.map(n => NOTES[n % 12]).join(' ')}</div>
-                    <div>RH: {chord.rh.map(n => NOTES[n % 12]).join(' ')}</div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
@@ -549,22 +693,34 @@ export default function App() {
           </div>
         )}
 
-        {/* Export */}
+        {/* Export - ALL INSTRUMENTS */}
         <div style={panel}>
-          <h3 style={{ ...label, textAlign: 'center', marginBottom: '14px' }}>Export MIDI</h3>
-          <div style={{ display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <h3 style={{ ...label, textAlign: 'center', marginBottom: '12px' }}>Export MIDI</h3>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap', marginBottom: '10px' }}>
             {[
-              { type: 'chords', label: 'Chords', color: '#8b5cf6' },
-              { type: 'bass', label: 'Bass', color: '#f97316' },
-              { type: 'drums', label: 'Drums', color: '#ef4444' },
-              { type: 'full', label: 'Full Track', color: '#22c55e' },
+              { type: 'chords', label: '🎹 Chords', color: '#8b5cf6' },
+              { type: 'pad', label: '🎛️ Pad', color: '#14b8a6' },
+              { type: 'strings', label: '🎻 Strings', color: '#06b6d4' },
+              { type: 'guitar', label: '🎸 Guitar', color: '#22c55e' },
+              { type: 'bass', label: '🎸 Bass', color: '#f97316' },
+              { type: 'melody', label: '🎵 Melody', color: '#ec4899' },
+              { type: 'drums', label: '🥁 Drums', color: '#ef4444' },
             ].map(exp => (
               <button key={exp.type} onClick={() => exportMidi(exp.type)}
-                style={{ ...exportBtn, borderColor: `${exp.color}40`, background: `${exp.color}12`, color: exp.color }}>
+                style={{ ...exportBtn, borderColor: `${exp.color}40`, background: `${exp.color}10`, color: exp.color }}>
                 {exp.label}
               </button>
             ))}
           </div>
+          <div style={{ display: 'flex', justifyContent: 'center' }}>
+            <button onClick={() => exportMidi('full')}
+              style={{ ...exportBtn, borderColor: 'rgba(34,197,94,0.5)', background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '10px 32px' }}>
+              📦 Export Full Track
+            </button>
+          </div>
+          <p style={{ textAlign: 'center', marginTop: '10px', fontSize: '0.7rem', color: 'rgba(232,228,240,0.3)' }}>
+            Export any instrument separately or the full arrangement
+          </p>
         </div>
       </div>
     </div>
@@ -572,16 +728,16 @@ export default function App() {
 }
 
 // Styles
-const panel = { background: 'rgba(255,255,255,0.03)', borderRadius: '14px', padding: '16px', border: '1px solid rgba(255,255,255,0.05)' };
-const label = { fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(232,228,240,0.35)', marginBottom: '10px' };
-const sliderLabel = { fontSize: '0.8rem', color: 'rgba(232,228,240,0.6)', marginBottom: '4px' };
+const panel = { background: 'rgba(255,255,255,0.025)', borderRadius: '12px', padding: '14px', border: '1px solid rgba(255,255,255,0.05)' };
+const label = { fontSize: '0.62rem', textTransform: 'uppercase', letterSpacing: '0.1em', color: 'rgba(232,228,240,0.35)', marginBottom: '10px' };
+const sliderLabel = { fontSize: '0.78rem', color: 'rgba(232,228,240,0.6)', marginBottom: '5px' };
 
 const enableBtn = { marginTop: '12px', padding: '10px 28px', borderRadius: '24px', border: '1px solid rgba(139,92,246,0.4)', background: 'rgba(139,92,246,0.15)', color: '#c084fc', fontSize: '0.85rem', cursor: 'pointer' };
-const artistBtn = { padding: '10px 16px', borderRadius: '10px', border: '1px solid', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', minWidth: '140px' };
-const progBtn = { padding: '10px', borderRadius: '10px', border: '1px solid transparent', cursor: 'pointer', textAlign: 'left', color: '#e8e4f0', transition: 'all 0.12s' };
-const varBtn = { padding: '12px', borderRadius: '10px', border: '1px solid', cursor: 'pointer', textAlign: 'center', color: '#e8e4f0', transition: 'all 0.15s' };
-const instBtn = { padding: '8px 14px', borderRadius: '8px', border: '1px solid', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 500, transition: 'all 0.15s' };
-const playBtn = { padding: '14px 48px', borderRadius: '30px', border: 'none', color: '#fff', fontSize: '1rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' };
-const shuffleBtn = { padding: '14px 24px', borderRadius: '30px', border: '1px solid rgba(139,92,246,0.4)', background: 'rgba(139,92,246,0.1)', color: '#c084fc', fontSize: '0.9rem', fontWeight: 600, cursor: 'pointer' };
-const regenBtn = { padding: '6px 16px', borderRadius: '16px', border: '1px solid rgba(251,146,60,0.4)', background: 'rgba(251,146,60,0.1)', color: '#fb923c', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' };
-const exportBtn = { padding: '10px 22px', borderRadius: '8px', border: '1px solid', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' };
+const artistBtn = { padding: '8px 14px', borderRadius: '8px', border: '1px solid', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', minWidth: '120px' };
+const progBtn = { padding: '10px', borderRadius: '8px', border: '1px solid transparent', cursor: 'pointer', textAlign: 'left', color: '#e8e4f0', transition: 'all 0.12s' };
+const varBtn = { padding: '10px', borderRadius: '8px', border: '1px solid', cursor: 'pointer', textAlign: 'center', color: '#e8e4f0', transition: 'all 0.15s' };
+const instBtn = { padding: '7px 12px', borderRadius: '6px', border: '1px solid', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 500, transition: 'all 0.15s' };
+const playBtn = { padding: '12px 44px', borderRadius: '28px', border: 'none', color: '#fff', fontSize: '0.95rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s' };
+const shuffleBtn = { padding: '12px 22px', borderRadius: '28px', border: '1px solid rgba(139,92,246,0.4)', background: 'rgba(139,92,246,0.1)', color: '#c084fc', fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' };
+const regenBtn = { padding: '5px 14px', borderRadius: '14px', border: '1px solid rgba(251,146,60,0.4)', background: 'rgba(251,146,60,0.1)', color: '#fb923c', fontSize: '0.7rem', fontWeight: 600, cursor: 'pointer' };
+const exportBtn = { padding: '8px 16px', borderRadius: '6px', border: '1px solid', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.15s' };
