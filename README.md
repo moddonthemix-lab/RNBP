@@ -1,3 +1,4 @@
+[README.md](https://github.com/user-attachments/files/23810365/README.md)
 # R&B Producer 🎹
 
 A professional R&B production assistant with real instrument sounds, MIDI export, and artist-specific chord progressions.
