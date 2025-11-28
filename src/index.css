@@ -510,6 +510,239 @@ input[type="range"]::-webkit-slider-thumb {
   color: var(--text-dimmer);
 }
 
+/* Controls Row */
+.controls-row {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+@media (max-width: 900px) {
+  .controls-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.control-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.control-panel .label {
+  margin-bottom: 10px;
+}
+
+.control-panel .value {
+  color: var(--purple);
+  font-weight: 600;
+}
+
+/* Song Info */
+.song-info .info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.song-info .info-grid span {
+  color: var(--pink);
+  font-weight: 600;
+}
+
+/* Artist Tags */
+.artist-tags {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.artist-tags .tag {
+  font-size: 0.55rem;
+  padding: 2px 6px;
+  border-radius: 10px;
+  background: rgba(255,255,255,0.08);
+  color: var(--text-dim);
+}
+
+/* Song Panel */
+.song-panel {
+  padding: 20px;
+}
+
+.song-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.song-header .label {
+  margin: 0;
+  font-size: 0.8rem;
+}
+
+.gen-badge {
+  font-size: 0.6rem;
+  opacity: 0.4;
+  margin-left: 8px;
+}
+
+/* Progress Bar */
+.progress-container {
+  margin-bottom: 16px;
+}
+
+.progress-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 0.1s linear;
+}
+
+.progress-time {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Sections Overview */
+.sections-overview {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 20px;
+  height: 32px;
+}
+
+.section-block {
+  background: color-mix(in srgb, var(--color) 30%, transparent);
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  min-width: 40px;
+}
+
+.section-block.active {
+  background: var(--color);
+  transform: scaleY(1.1);
+}
+
+.section-block .section-name {
+  font-size: 0.55rem;
+  font-weight: 600;
+  color: white;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 4px;
+}
+
+/* Current Section */
+.current-section {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.current-section h4 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.current-section p {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.chord-display {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Structure Panel */
+.structure-panel {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.structure-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.structure-section {
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.02);
+  border-radius: 8px;
+  border-left: 3px solid transparent;
+  transition: all 0.2s;
+}
+
+.structure-section.playing {
+  background: color-mix(in srgb, var(--color) 15%, transparent);
+  border-left-color: var(--color);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.section-num {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+.structure-section.playing .section-num {
+  background: var(--color);
+  color: white;
+}
+
+.section-title {
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.section-bars {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.section-chords {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-family: 'SF Mono', Monaco, monospace;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
