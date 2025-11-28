@@ -1,497 +1,520 @@
 import * as Tone from 'tone';
 
-// Improved Audio Engine with realistic R&B sounds
-class AudioEngine {
+/**
+ * Professional R&B Audio Engine
+ * Uses Tone.Part for reliable scheduling and proper voice management
+ */
+class RnBAudioEngine {
   constructor() {
     this.initialized = false;
     this.instruments = {};
+    this.parts = {};
+    this.isPlaying = false;
   }
 
   async init() {
-    if (this.initialized) return;
+    if (this.initialized) return true;
     
     await Tone.start();
-    console.log('Audio context started');
     
-    // Master chain
-    this.masterLimiter = new Tone.Limiter(-3).toDestination();
-    this.masterComp = new Tone.Compressor(-18, 4).connect(this.masterLimiter);
-    this.masterReverb = new Tone.Reverb({ decay: 3, wet: 0.25 }).connect(this.masterComp);
-    this.masterDelay = new Tone.FeedbackDelay('8n', 0.15).connect(this.masterReverb);
+    // Set up high-quality audio context
+    Tone.getContext().lookAhead = 0.1; // Better scheduling
     
-    // ===================
-    // RHODES ELECTRIC PIANO - Warm, bell-like, with tremolo
-    // ===================
-    this.instruments.rhodes = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 2,
-      modulationIndex: 3.5,
-      oscillator: { type: 'sine' },
-      envelope: {
-        attack: 0.008,
-        decay: 0.8,
-        sustain: 0.6,
-        release: 2.5
-      },
-      modulation: { type: 'sine' },
-      modulationEnvelope: {
-        attack: 0.01,
-        decay: 0.5,
-        sustain: 0.3,
-        release: 1.5
+    // ============================================
+    // MASTER CHAIN - Professional mixing
+    // ============================================
+    this.masterGain = new Tone.Gain(0.8).toDestination();
+    this.masterLimiter = new Tone.Limiter(-2).connect(this.masterGain);
+    this.masterComp = new Tone.Compressor({
+      threshold: -20,
+      ratio: 4,
+      attack: 0.003,
+      release: 0.25
+    }).connect(this.masterLimiter);
+    
+    this.masterReverb = new Tone.Reverb({
+      decay: 2.5,
+      wet: 0.2,
+      preDelay: 0.01
+    }).connect(this.masterComp);
+    
+    await this.masterReverb.generate();
+    
+    // ============================================
+    // RHODES ELECTRIC PIANO - The R&B staple
+    // ============================================
+    this.instruments.piano = new Tone.PolySynth(Tone.FMSynth, {
+      maxPolyphony: 16,
+      voice: {
+        harmonicity: 3,
+        modulationIndex: 10,
+        oscillator: { type: 'sine' },
+        envelope: {
+          attack: 0.01,
+          decay: 0.5,
+          sustain: 0.6,
+          release: 1.5
+        },
+        modulation: { type: 'triangle' },
+        modulationEnvelope: {
+          attack: 0.01,
+          decay: 0.3,
+          sustain: 0.4,
+          release: 0.8
+        }
       }
     });
     
-    const rhodesTremolo = new Tone.Tremolo(3.5, 0.35).start();
-    const rhodesChorus = new Tone.Chorus(2.5, 3.5, 0.5).start();
-    const rhodesEQ = new Tone.EQ3(-2, 3, -4);
+    const pianoTremolo = new Tone.Tremolo(4, 0.3).start();
+    const pianoChorus = new Tone.Chorus(2, 2.5, 0.4).start();
     
-    this.instruments.rhodes.connect(rhodesTremolo);
-    rhodesTremolo.connect(rhodesChorus);
-    rhodesChorus.connect(rhodesEQ);
-    rhodesEQ.connect(this.masterDelay);
-    this.instruments.rhodes.volume.value = -8;
+    this.instruments.piano.connect(pianoTremolo);
+    pianoTremolo.connect(pianoChorus);
+    pianoChorus.connect(this.masterReverb);
+    this.instruments.piano.volume.value = -6;
 
-    // ===================
-    // WURLITZER - Brighter, more bark
-    // ===================
-    this.instruments.wurli = new Tone.PolySynth(Tone.FMSynth, {
-      harmonicity: 1.5,
-      modulationIndex: 5,
-      oscillator: { type: 'sine' },
-      envelope: {
-        attack: 0.005,
-        decay: 0.6,
-        sustain: 0.4,
-        release: 1.8
-      },
-      modulation: { type: 'triangle' },
-      modulationEnvelope: {
-        attack: 0.008,
-        decay: 0.4,
-        sustain: 0.2,
-        release: 1
-      }
-    });
-    
-    const wurliTremolo = new Tone.Tremolo(5, 0.5).start();
-    const wurliDrive = new Tone.Distortion(0.08);
-    
-    this.instruments.wurli.connect(wurliTremolo);
-    wurliTremolo.connect(wurliDrive);
-    wurliDrive.connect(this.masterDelay);
-    this.instruments.wurli.volume.value = -10;
-
-    // ===================
-    // WARM PAD - Lush sustained chords
-    // ===================
+    // ============================================
+    // WARM PAD - Lush background
+    // ============================================
     this.instruments.pad = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sawtooth' },
-      envelope: {
-        attack: 0.8,
-        decay: 0.3,
-        sustain: 0.9,
-        release: 3
+      maxPolyphony: 12,
+      voice: {
+        oscillator: { type: 'sawtooth' },
+        envelope: {
+          attack: 0.6,
+          decay: 0.3,
+          sustain: 0.8,
+          release: 2.5
+        }
       }
     });
     
-    const padFilter = new Tone.Filter(600, 'lowpass', -24);
-    const padChorus = new Tone.Chorus(1.5, 4, 0.7).start();
-    const padReverb = new Tone.Reverb({ decay: 5, wet: 0.5 });
+    const padFilter = new Tone.Filter({
+      frequency: 800,
+      type: 'lowpass',
+      rolloff: -24
+    });
+    const padChorus = new Tone.Chorus(1, 3, 0.6).start();
     
     this.instruments.pad.connect(padFilter);
     padFilter.connect(padChorus);
-    padChorus.connect(padReverb);
-    padReverb.connect(this.masterComp);
-    this.instruments.pad.volume.value = -16;
+    padChorus.connect(this.masterReverb);
+    this.instruments.pad.volume.value = -14;
 
-    // ===================
-    // STRINGS - Orchestral pad
-    // ===================
+    // ============================================
+    // STRINGS - Cinematic texture
+    // ============================================
     this.instruments.strings = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'sawtooth' },
-      envelope: {
-        attack: 1.2,
-        decay: 0.5,
-        sustain: 0.85,
-        release: 2.5
+      maxPolyphony: 10,
+      voice: {
+        oscillator: { type: 'fatsawtooth', spread: 30, count: 3 },
+        envelope: {
+          attack: 1.0,
+          decay: 0.4,
+          sustain: 0.75,
+          release: 2.0
+        }
       }
     });
     
-    const stringsFilter = new Tone.Filter(1200, 'lowpass', -12);
-    const stringsChorus = new Tone.Chorus(0.8, 5, 0.6).start();
-    
+    const stringsFilter = new Tone.Filter({ frequency: 2000, type: 'lowpass' });
     this.instruments.strings.connect(stringsFilter);
-    stringsFilter.connect(stringsChorus);
-    stringsChorus.connect(this.masterReverb);
-    this.instruments.strings.volume.value = -18;
+    stringsFilter.connect(this.masterReverb);
+    this.instruments.strings.volume.value = -16;
 
-    // ===================
-    // CLEAN GUITAR - Warm jazz guitar
-    // ===================
-    this.instruments.guitar = new Tone.PolySynth(Tone.Synth, {
-      oscillator: { type: 'triangle' },
-      envelope: {
-        attack: 0.01,
-        decay: 0.3,
-        sustain: 0.5,
-        release: 1.5
-      }
+    // ============================================
+    // PLUCK / GUITAR
+    // ============================================
+    this.instruments.guitar = new Tone.PluckSynth({
+      attackNoise: 1,
+      dampening: 3000,
+      resonance: 0.96,
+      release: 1.5
     });
     
-    const guitarChorus = new Tone.Chorus(1.2, 2.5, 0.3).start();
-    const guitarDelay = new Tone.FeedbackDelay('8n.', 0.2);
-    
-    this.instruments.guitar.connect(guitarChorus);
-    guitarChorus.connect(guitarDelay);
+    const guitarDelay = new Tone.FeedbackDelay('8n.', 0.15);
+    this.instruments.guitar.connect(guitarDelay);
     guitarDelay.connect(this.masterReverb);
-    this.instruments.guitar.volume.value = -12;
+    this.instruments.guitar.volume.value = -8;
 
-    // ===================
-    // PLUCK GUITAR - For arpeggios
-    // ===================
-    this.instruments.pluck = new Tone.PluckSynth({
-      attackNoise: 1.2,
-      dampening: 2800,
-      resonance: 0.97,
-      release: 2
-    });
-    
-    const pluckDelay = new Tone.FeedbackDelay('16n', 0.15);
-    this.instruments.pluck.connect(pluckDelay);
-    pluckDelay.connect(this.masterReverb);
-    this.instruments.pluck.volume.value = -8;
-
-    // ===================
-    // BASS - Deep, warm sub
-    // ===================
+    // ============================================
+    // BASS - Deep sub
+    // ============================================
     this.instruments.bass = new Tone.MonoSynth({
       oscillator: { type: 'sawtooth' },
       filter: {
-        Q: 3,
+        Q: 4,
         type: 'lowpass',
-        frequency: 350
+        frequency: 300
       },
-      envelope: {
-        attack: 0.03,
-        decay: 0.15,
-        sustain: 0.85,
-        release: 0.6
-      },
-      filterEnvelope: {
-        attack: 0.03,
-        decay: 0.25,
-        sustain: 0.4,
-        release: 0.5,
-        baseFrequency: 80,
-        octaves: 2.8
-      }
-    });
-    
-    const bassComp = new Tone.Compressor(-20, 6);
-    this.instruments.bass.connect(bassComp);
-    bassComp.connect(this.masterComp);
-    this.instruments.bass.volume.value = -6;
-
-    // ===================
-    // SUB BASS - Pure low end
-    // ===================
-    this.instruments.subBass = new Tone.MonoSynth({
-      oscillator: { type: 'sine' },
       envelope: {
         attack: 0.02,
-        decay: 0.1,
-        sustain: 0.9,
+        decay: 0.2,
+        sustain: 0.8,
         release: 0.5
+      },
+      filterEnvelope: {
+        attack: 0.02,
+        decay: 0.2,
+        sustain: 0.5,
+        release: 0.4,
+        baseFrequency: 60,
+        octaves: 3
       }
     });
     
-    const subFilter = new Tone.Filter(100, 'lowpass');
-    this.instruments.subBass.connect(subFilter);
-    subFilter.connect(this.masterComp);
-    this.instruments.subBass.volume.value = -10;
+    this.instruments.bass.connect(this.masterComp);
+    this.instruments.bass.volume.value = -4;
 
-    // ===================
-    // MELODY LEAD - Smooth sine with vibrato
-    // ===================
-    this.instruments.lead = new Tone.MonoSynth({
+    // ============================================
+    // SUB BASS - Pure low end
+    // ============================================
+    this.instruments.sub = new Tone.Synth({
       oscillator: { type: 'sine' },
       envelope: {
-        attack: 0.08,
-        decay: 0.3,
-        sustain: 0.7,
-        release: 1.2
-      },
-      filter: {
-        Q: 1,
-        type: 'lowpass',
-        frequency: 3000
+        attack: 0.01,
+        decay: 0.1,
+        sustain: 0.9,
+        release: 0.4
       }
     });
     
-    const leadVibrato = new Tone.Vibrato(4.5, 0.15);
+    const subFilter = new Tone.Filter(80, 'lowpass');
+    this.instruments.sub.connect(subFilter);
+    subFilter.connect(this.masterComp);
+    this.instruments.sub.volume.value = -8;
+
+    // ============================================
+    // MELODY LEAD
+    // ============================================
+    this.instruments.lead = new Tone.Synth({
+      oscillator: { type: 'sine' },
+      envelope: {
+        attack: 0.05,
+        decay: 0.2,
+        sustain: 0.7,
+        release: 1.0
+      }
+    });
+    
+    const leadVibrato = new Tone.Vibrato(5, 0.1);
     const leadDelay = new Tone.FeedbackDelay('8n', 0.2);
     
     this.instruments.lead.connect(leadVibrato);
     leadVibrato.connect(leadDelay);
     leadDelay.connect(this.masterReverb);
-    this.instruments.lead.volume.value = -10;
+    this.instruments.lead.volume.value = -8;
 
-    // ===================
-    // SYNTH LEAD - For hooks
-    // ===================
-    this.instruments.synthLead = new Tone.MonoSynth({
-      oscillator: { type: 'square' },
-      envelope: {
-        attack: 0.02,
-        decay: 0.2,
-        sustain: 0.6,
-        release: 0.8
-      },
-      filter: {
-        Q: 2,
-        type: 'lowpass',
-        frequency: 2000
-      },
-      filterEnvelope: {
-        attack: 0.01,
-        decay: 0.3,
-        sustain: 0.3,
-        release: 0.5,
-        baseFrequency: 800,
-        octaves: 2
-      }
-    });
-    
-    const synthLeadChorus = new Tone.Chorus(2, 3, 0.4).start();
-    this.instruments.synthLead.connect(synthLeadChorus);
-    synthLeadChorus.connect(this.masterDelay);
-    this.instruments.synthLead.volume.value = -12;
-
-    // ===================
+    // ============================================
     // DRUMS
-    // ===================
+    // ============================================
     
-    // Kick - Deep 808
+    // Kick - 808 style
     this.instruments.kick = new Tone.MembraneSynth({
-      pitchDecay: 0.08,
-      octaves: 7,
+      pitchDecay: 0.05,
+      octaves: 6,
       oscillator: { type: 'sine' },
       envelope: {
-        attack: 0.002,
-        decay: 0.6,
-        sustain: 0.02,
-        release: 0.8
+        attack: 0.001,
+        decay: 0.5,
+        sustain: 0.01,
+        release: 0.6
       }
     });
     this.instruments.kick.connect(this.masterComp);
-    this.instruments.kick.volume.value = -4;
+    this.instruments.kick.volume.value = -2;
 
     // Snare
     this.instruments.snare = new Tone.NoiseSynth({
       noise: { type: 'white' },
       envelope: {
-        attack: 0.002,
-        decay: 0.18,
-        sustain: 0.02,
-        release: 0.15
-      }
-    });
-    
-    const snareFilter = new Tone.Filter(4000, 'bandpass', -12);
-    const snareBody = new Tone.MembraneSynth({
-      pitchDecay: 0.01,
-      octaves: 4,
-      envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 }
-    });
-    
-    this.instruments.snare.connect(snareFilter);
-    snareFilter.connect(this.masterReverb);
-    snareBody.connect(this.masterComp);
-    this.instruments.snare.volume.value = -10;
-    this.instruments.snareBody = snareBody;
-    this.instruments.snareBody.volume.value = -14;
-
-    // Hi-Hat Closed
-    this.instruments.hihat = new Tone.MetalSynth({
-      frequency: 280,
-      envelope: {
         attack: 0.001,
-        decay: 0.06,
-        release: 0.02
-      },
-      harmonicity: 5.1,
-      modulationIndex: 40,
-      resonance: 3500,
-      octaves: 1.2
-    });
-    this.instruments.hihat.connect(this.masterComp);
-    this.instruments.hihat.volume.value = -22;
-
-    // Hi-Hat Open
-    this.instruments.openHat = new Tone.MetalSynth({
-      frequency: 280,
-      envelope: {
-        attack: 0.001,
-        decay: 0.35,
-        release: 0.15
-      },
-      harmonicity: 5.1,
-      modulationIndex: 40,
-      resonance: 3500,
-      octaves: 1.2
-    });
-    this.instruments.openHat.connect(this.masterReverb);
-    this.instruments.openHat.volume.value = -24;
-
-    // Clap
-    this.instruments.clap = new Tone.NoiseSynth({
-      noise: { type: 'pink' },
-      envelope: {
-        attack: 0.001,
-        decay: 0.12,
-        sustain: 0,
+        decay: 0.15,
+        sustain: 0.01,
         release: 0.1
       }
     });
-    const clapFilter = new Tone.Filter(2000, 'bandpass');
-    this.instruments.clap.connect(clapFilter);
-    clapFilter.connect(this.masterReverb);
-    this.instruments.clap.volume.value = -14;
+    const snareFilter = new Tone.Filter(5000, 'bandpass');
+    this.instruments.snare.connect(snareFilter);
+    snareFilter.connect(this.masterReverb);
+    this.instruments.snare.volume.value = -10;
 
-    // Rim
-    this.instruments.rim = new Tone.MembraneSynth({
-      pitchDecay: 0.008,
-      octaves: 2,
-      envelope: { attack: 0.001, decay: 0.05, sustain: 0, release: 0.05 }
+    // Hi-hat closed
+    this.instruments.hihat = new Tone.MetalSynth({
+      frequency: 300,
+      envelope: { attack: 0.001, decay: 0.05, release: 0.01 },
+      harmonicity: 5.1,
+      modulationIndex: 32,
+      resonance: 4000,
+      octaves: 1.5
     });
-    this.instruments.rim.connect(this.masterComp);
-    this.instruments.rim.volume.value = -16;
+    this.instruments.hihat.connect(this.masterComp);
+    this.instruments.hihat.volume.value = -20;
+
+    // Hi-hat open
+    this.instruments.openHat = new Tone.MetalSynth({
+      frequency: 300,
+      envelope: { attack: 0.001, decay: 0.3, release: 0.1 },
+      harmonicity: 5.1,
+      modulationIndex: 32,
+      resonance: 4000,
+      octaves: 1.5
+    });
+    this.instruments.openHat.connect(this.masterReverb);
+    this.instruments.openHat.volume.value = -22;
 
     this.initialized = true;
-    console.log('All instruments loaded with improved sounds');
+    console.log('R&B Audio Engine initialized');
+    return true;
   }
 
-  // Convert MIDI to note name
+  // Convert MIDI number to note name
   midiToNote(midi) {
     const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const note = notes[midi % 12];
     const octave = Math.floor(midi / 12) - 1;
+    const note = notes[midi % 12];
     return `${note}${octave}`;
-  }
-
-  // Play chord with left hand and right hand separation
-  playChordSplit(lhNotes, rhNotes, duration, instrument = 'rhodes', time = Tone.now(), velocity = 0.7) {
-    if (!this.initialized) return;
-    
-    const inst = this.instruments[instrument];
-    if (!inst) return;
-
-    // Convert MIDI to note names
-    const lhNames = lhNotes.map(n => this.midiToNote(n));
-    const rhNames = rhNotes.map(n => this.midiToNote(n));
-    
-    // Play left hand slightly before right hand for realism
-    if (inst.triggerAttackRelease) {
-      // Left hand - bass notes
-      inst.triggerAttackRelease(lhNames, duration, time, velocity * 0.85);
-      // Right hand - chord tones, slightly delayed
-      inst.triggerAttackRelease(rhNames, duration, time + 0.015, velocity);
-    }
-  }
-
-  // Play full chord
-  playChord(notes, duration, instrument = 'rhodes', time = Tone.now(), velocity = 0.7) {
-    if (!this.initialized) return;
-    
-    const inst = this.instruments[instrument];
-    if (!inst) return;
-
-    const noteNames = notes.map(n => this.midiToNote(n));
-    
-    if (inst.triggerAttackRelease) {
-      inst.triggerAttackRelease(noteNames, duration, time, velocity);
-    }
-  }
-
-  // Play single note
-  playNote(midiNote, duration, instrument = 'lead', time = Tone.now(), velocity = 0.7) {
-    if (!this.initialized) return;
-    
-    const inst = this.instruments[instrument];
-    if (!inst) return;
-
-    const noteName = this.midiToNote(midiNote);
-    
-    if (inst.triggerAttackRelease) {
-      inst.triggerAttackRelease(noteName, duration, time, velocity);
-    }
-  }
-
-  // Play bass with optional sub layer
-  playBass(midiNote, duration, time = Tone.now(), addSub = true) {
-    if (!this.initialized) return;
-    
-    const noteName = this.midiToNote(midiNote);
-    this.instruments.bass.triggerAttackRelease(noteName, duration, time, 0.8);
-    
-    if (addSub && midiNote < 48) {
-      this.instruments.subBass.triggerAttackRelease(noteName, duration, time, 0.5);
-    }
-  }
-
-  // Play drum hit
-  playDrum(type, time = Tone.now(), velocity = 1) {
-    if (!this.initialized) return;
-    
-    switch(type) {
-      case 'kick':
-        this.instruments.kick.triggerAttackRelease('C1', '4n', time, velocity);
-        break;
-      case 'snare':
-        this.instruments.snare.triggerAttackRelease('8n', time, velocity * 0.8);
-        this.instruments.snareBody.triggerAttackRelease('E2', '16n', time, velocity * 0.5);
-        break;
-      case 'hihat':
-        this.instruments.hihat.triggerAttackRelease('32n', time, velocity * 0.4);
-        break;
-      case 'openHat':
-        this.instruments.openHat.triggerAttackRelease('8n', time, velocity * 0.35);
-        break;
-      case 'clap':
-        this.instruments.clap.triggerAttackRelease('16n', time, velocity * 0.7);
-        break;
-      case 'rim':
-        this.instruments.rim.triggerAttackRelease('G4', '32n', time, velocity * 0.6);
-        break;
-    }
-  }
-
-  // Stop all
-  stopAll() {
-    Tone.Transport.stop();
-    Tone.Transport.cancel();
-    
-    Object.values(this.instruments).forEach(inst => {
-      if (inst.releaseAll) inst.releaseAll();
-    });
-  }
-
-  // Set reverb
-  setReverb(wet) {
-    if (this.masterReverb) {
-      this.masterReverb.wet.value = wet;
-    }
   }
 
   // Set BPM
   setBPM(bpm) {
-    Tone.Transport.bpm.value = bpm;
+    Tone.getTransport().bpm.value = bpm;
   }
 
-  now() {
-    return Tone.now();
+  // Set reverb amount
+  setReverb(amount) {
+    if (this.masterReverb) {
+      this.masterReverb.wet.value = Math.min(0.6, amount);
+    }
+  }
+
+  /**
+   * Play a full arrangement using Tone.Part for reliable timing
+   */
+  playArrangement(arrangement, onChordChange) {
+    if (!this.initialized || this.isPlaying) return;
+    
+    this.stopAll();
+    this.isPlaying = true;
+    
+    const transport = Tone.getTransport();
+    transport.cancel();
+    transport.position = 0;
+    
+    const { chords, bpm, instruments, drumPattern, bassPattern, swing } = arrangement;
+    const beatsPerChord = 4;
+    const secondsPerBeat = 60 / bpm;
+    
+    this.setBPM(bpm);
+    
+    // Create events array for each part
+    const pianoEvents = [];
+    const padEvents = [];
+    const stringsEvents = [];
+    const guitarEvents = [];
+    const bassEvents = [];
+    const melodyEvents = [];
+    const kickEvents = [];
+    const snareEvents = [];
+    const hihatEvents = [];
+    
+    chords.forEach((chord, chordIdx) => {
+      const chordStartTime = chordIdx * beatsPerChord * secondsPerBeat;
+      
+      // Piano - play chord on beats 1 and 3
+      if (instruments.piano) {
+        [0, 2].forEach(beat => {
+          const time = chordStartTime + (beat * secondsPerBeat);
+          pianoEvents.push({ time, notes: chord.notes, duration: 1.5 * secondsPerBeat });
+        });
+      }
+      
+      // Pad - sustained whole note
+      if (instruments.pad) {
+        padEvents.push({ 
+          time: chordStartTime, 
+          notes: chord.notes.map(n => n + 12), 
+          duration: beatsPerChord * secondsPerBeat * 0.9 
+        });
+      }
+      
+      // Strings - sustained
+      if (instruments.strings) {
+        stringsEvents.push({ 
+          time: chordStartTime, 
+          notes: chord.notes, 
+          duration: beatsPerChord * secondsPerBeat * 0.9 
+        });
+      }
+      
+      // Guitar - arpeggiate
+      if (instruments.guitar) {
+        chord.notes.forEach((note, i) => {
+          guitarEvents.push({ 
+            time: chordStartTime + (i * 0.15), 
+            note 
+          });
+        });
+      }
+      
+      // Bass - pattern
+      if (instruments.bass) {
+        const bassRoot = chord.bassNote || chord.notes[0] - 12;
+        bassPattern.forEach(hit => {
+          if (hit.beat < beatsPerChord) {
+            bassEvents.push({
+              time: chordStartTime + (hit.beat * secondsPerBeat),
+              note: bassRoot + (hit.interval || 0),
+              duration: hit.duration * secondsPerBeat
+            });
+          }
+        });
+      }
+      
+      // Melody - from chord tones
+      if (instruments.melody) {
+        const melodyNotes = [...chord.notes].sort(() => Math.random() - 0.5);
+        [0, 0.5, 1.5, 2.5].forEach((beat, i) => {
+          if (i < melodyNotes.length && Math.random() > 0.3) {
+            const swingAmount = (i % 2 === 1) ? swing * secondsPerBeat : 0;
+            melodyEvents.push({
+              time: chordStartTime + (beat * secondsPerBeat) + swingAmount,
+              note: melodyNotes[i % melodyNotes.length] + 12,
+              duration: 0.4 * secondsPerBeat
+            });
+          }
+        });
+      }
+      
+      // Drums
+      if (instruments.drums) {
+        drumPattern.kick.forEach(beat => {
+          if (beat < beatsPerChord) {
+            kickEvents.push({ time: chordStartTime + (beat * secondsPerBeat) });
+          }
+        });
+        
+        drumPattern.snare.forEach(beat => {
+          if (beat < beatsPerChord) {
+            snareEvents.push({ time: chordStartTime + (beat * secondsPerBeat) });
+          }
+        });
+        
+        drumPattern.hihat.forEach(beat => {
+          if (beat < beatsPerChord) {
+            const swingAmount = (beat * 2) % 2 === 1 ? swing * 0.3 * secondsPerBeat : 0;
+            hihatEvents.push({ time: chordStartTime + (beat * secondsPerBeat) + swingAmount });
+          }
+        });
+      }
+      
+      // Schedule visual chord change
+      transport.schedule((time) => {
+        Tone.getDraw().schedule(() => {
+          if (onChordChange) onChordChange(chordIdx);
+        }, time);
+      }, chordStartTime);
+    });
+    
+    // Create and start Parts
+    if (pianoEvents.length > 0) {
+      this.parts.piano = new Tone.Part((time, event) => {
+        const noteNames = event.notes.map(n => this.midiToNote(n));
+        this.instruments.piano.triggerAttackRelease(noteNames, event.duration, time, 0.7);
+      }, pianoEvents).start(0);
+    }
+    
+    if (padEvents.length > 0) {
+      this.parts.pad = new Tone.Part((time, event) => {
+        const noteNames = event.notes.map(n => this.midiToNote(n));
+        this.instruments.pad.triggerAttackRelease(noteNames, event.duration, time, 0.4);
+      }, padEvents).start(0);
+    }
+    
+    if (stringsEvents.length > 0) {
+      this.parts.strings = new Tone.Part((time, event) => {
+        const noteNames = event.notes.map(n => this.midiToNote(n));
+        this.instruments.strings.triggerAttackRelease(noteNames, event.duration, time, 0.35);
+      }, stringsEvents).start(0);
+    }
+    
+    if (guitarEvents.length > 0) {
+      this.parts.guitar = new Tone.Part((time, event) => {
+        this.instruments.guitar.triggerAttack(this.midiToNote(event.note), time);
+      }, guitarEvents).start(0);
+    }
+    
+    if (bassEvents.length > 0) {
+      this.parts.bass = new Tone.Part((time, event) => {
+        this.instruments.bass.triggerAttackRelease(this.midiToNote(event.note), event.duration, time, 0.8);
+        // Add sub bass for low notes
+        if (event.note < 48) {
+          this.instruments.sub.triggerAttackRelease(this.midiToNote(event.note), event.duration, time, 0.5);
+        }
+      }, bassEvents).start(0);
+    }
+    
+    if (melodyEvents.length > 0) {
+      this.parts.melody = new Tone.Part((time, event) => {
+        this.instruments.lead.triggerAttackRelease(this.midiToNote(event.note), event.duration, time, 0.6);
+      }, melodyEvents).start(0);
+    }
+    
+    if (kickEvents.length > 0) {
+      this.parts.kick = new Tone.Part((time) => {
+        this.instruments.kick.triggerAttackRelease('C1', '8n', time, 0.9);
+      }, kickEvents).start(0);
+    }
+    
+    if (snareEvents.length > 0) {
+      this.parts.snare = new Tone.Part((time) => {
+        this.instruments.snare.triggerAttackRelease('16n', time, 0.7);
+      }, snareEvents).start(0);
+    }
+    
+    if (hihatEvents.length > 0) {
+      this.parts.hihat = new Tone.Part((time) => {
+        this.instruments.hihat.triggerAttackRelease('32n', time, 0.5);
+      }, hihatEvents).start(0);
+    }
+    
+    // Schedule end
+    const totalTime = chords.length * beatsPerChord * secondsPerBeat;
+    transport.schedule(() => {
+      this.stopAll();
+    }, totalTime + 0.5);
+    
+    // Start with slight delay for stability
+    transport.start('+0.1');
+    
+    return totalTime;
+  }
+
+  stopAll() {
+    this.isPlaying = false;
+    
+    const transport = Tone.getTransport();
+    transport.stop();
+    transport.cancel();
+    transport.position = 0;
+    
+    // Dispose all parts
+    Object.values(this.parts).forEach(part => {
+      if (part && part.dispose) {
+        part.stop();
+        part.dispose();
+      }
+    });
+    this.parts = {};
+    
+    // Release all synths
+    Object.values(this.instruments).forEach(inst => {
+      if (inst && inst.releaseAll) {
+        inst.releaseAll();
+      }
+    });
   }
 }
 
-export const audioEngine = new AudioEngine();
+export const audioEngine = new RnBAudioEngine();
 export default audioEngine;
