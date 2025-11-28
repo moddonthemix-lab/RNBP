@@ -2,34 +2,25 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
 import audioEngine from './audioEngine';
 import { 
-  NOTES, ARTIST_PROGRESSIONS, DRUM_PATTERNS, BASS_PATTERNS,
-  buildChord, transposeChord
-} from './chordLibrary';
+  ARTISTS, SONG_STRUCTURES, DRUM_PATTERNS, BASS_PATTERNS, NOTES,
+  generateSongArrangement, SECTION_TYPES
+} from './songStructure';
 import { createMidiFile, downloadMidi, generateMidiEvents } from './midiExport';
-
-// Random helpers
-const random = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
-const randomFloat = (min, max) => Math.random() * (max - min) + min;
-const randomChoice = (arr) => arr[Math.floor(Math.random() * arr.length)];
 
 export default function App() {
   // Core state
-  const [selectedArtist, setSelectedArtist] = useState('sza');
-  const [selectedProgIdx, setSelectedProgIdx] = useState(0);
+  const [selectedArtist, setSelectedArtist] = useState('bryson');
   const [keyTranspose, setKeyTranspose] = useState(0);
-  const [bpm, setBpm] = useState(80);
-  const [swing, setSwing] = useState(0.12);
   const [reverbAmount, setReverbAmount] = useState(0.25);
   
-  // Generated variations
-  const [variations, setVariations] = useState([]);
-  const [selectedVar, setSelectedVar] = useState(0);
+  // Song arrangement
+  const [arrangement, setArrangement] = useState(null);
   const [genCount, setGenCount] = useState(0);
   
   // Instruments
   const [instruments, setInstruments] = useState({
     piano: true,
-    pad: false,
+    pad: true,
     strings: false,
     guitar: false,
     bass: true,
@@ -39,52 +30,29 @@ export default function App() {
   
   // Playback state
   const [isPlaying, setIsPlaying] = useState(false);
+  const [currentSection, setCurrentSection] = useState(-1);
   const [currentChord, setCurrentChord] = useState(-1);
+  const [playbackTime, setPlaybackTime] = useState(0);
   const [audioReady, setAudioReady] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  
+  const playbackRef = useRef(null);
+  const intervalRef = useRef(null);
 
-  // Current data
-  const artist = ARTIST_PROGRESSIONS[selectedArtist];
-  const progression = artist?.progressions[selectedProgIdx];
-
-  // Generate variations when progression changes
-  const generateVariations = useCallback(() => {
-    if (!progression) return;
-    
-    const drumKeys = Object.keys(DRUM_PATTERNS);
-    const bassKeys = Object.keys(BASS_PATTERNS);
-    
-    const newVars = Array.from({ length: 6 }, (_, i) => {
-      const drumKey = randomChoice(drumKeys);
-      const bassKey = randomChoice(bassKeys);
-      
-      // Build chords with transposition
-      const chords = progression.chords.map(name => {
-        const chord = buildChord(name, 3);
-        return transposeChord(chord, keyTranspose);
-      });
-      
-      return {
-        id: `${Date.now()}-${i}`,
-        name: `Version ${i + 1}`,
-        bpm: random(72, 92),
-        swing: randomFloat(0.08, 0.18),
-        drumPattern: DRUM_PATTERNS[drumKey],
-        drumPatternName: drumKey,
-        bassPattern: BASS_PATTERNS[bassKey].pattern,
-        bassPatternName: BASS_PATTERNS[bassKey].name,
-        chords
-      };
-    });
-    
-    setVariations(newVars);
-    setSelectedVar(0);
+  // Generate new arrangement
+  const generateNew = useCallback(() => {
+    const newArrangement = generateSongArrangement(selectedArtist, keyTranspose);
+    setArrangement(newArrangement);
     setGenCount(c => c + 1);
-  }, [progression, keyTranspose]);
+    setCurrentSection(-1);
+    setCurrentChord(-1);
+    setPlaybackTime(0);
+  }, [selectedArtist, keyTranspose]);
 
+  // Generate on artist/key change
   useEffect(() => {
-    generateVariations();
-  }, [selectedArtist, selectedProgIdx, keyTranspose]);
+    generateNew();
+  }, [selectedArtist, keyTranspose]);
 
   // Init audio
   const initAudio = async () => {
@@ -102,80 +70,224 @@ export default function App() {
     }
   };
 
-  // Current variation
-  const currentVar = variations[selectedVar];
+  // Stop playback
+  const stopPlayback = useCallback(() => {
+    if (playbackRef.current) {
+      clearTimeout(playbackRef.current);
+    }
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+    audioEngine.stopAll();
+    setIsPlaying(false);
+    setCurrentSection(-1);
+    setCurrentChord(-1);
+  }, []);
 
-  // Play
+  // Play full song
   const handlePlay = useCallback(async () => {
     if (isPlaying) {
-      audioEngine.stopAll();
-      setIsPlaying(false);
-      setCurrentChord(-1);
+      stopPlayback();
       return;
     }
     
-    if (!currentVar) return;
+    if (!arrangement) return;
     
     const ready = await initAudio();
     if (!ready) return;
     
-    audioEngine.setReverb(reverbAmount);
+    setIsPlaying(true);
+    setPlaybackTime(0);
     
-    const arrangement = {
-      chords: currentVar.chords,
-      bpm: currentVar.bpm,
-      swing: currentVar.swing,
+    audioEngine.setReverb(reverbAmount);
+    audioEngine.setBPM(arrangement.tempo);
+    
+    // Flatten all chords with timing info
+    const allEvents = [];
+    let currentBeat = 0;
+    
+    arrangement.sections.forEach((section, sectionIdx) => {
+      const beatsPerBar = 4;
+      const sectionStartBeat = currentBeat;
+      
+      // Each chord gets equal time within the section
+      const chordsInSection = section.chords.length;
+      const barsPerChord = section.bars / chordsInSection;
+      const beatsPerChord = barsPerChord * beatsPerBar;
+      
+      section.chords.forEach((chord, chordIdx) => {
+        const chordStartBeat = sectionStartBeat + (chordIdx * beatsPerChord);
+        
+        allEvents.push({
+          type: 'chord',
+          sectionIdx,
+          chordIdx,
+          chord,
+          startBeat: chordStartBeat,
+          duration: beatsPerChord,
+          sectionType: section.type,
+          energy: section.energy
+        });
+      });
+      
+      currentBeat += section.bars * beatsPerBar;
+    });
+    
+    // Build arrangement for audio engine
+    const flatChords = allEvents.map(e => e.chord);
+    const beatsPerChord = allEvents.length > 0 ? allEvents[0].duration : 4;
+    
+    // Play using audio engine
+    const songArrangement = {
+      chords: flatChords,
+      bpm: arrangement.tempo,
+      swing: arrangement.swing,
       instruments,
-      drumPattern: currentVar.drumPattern,
-      bassPattern: currentVar.bassPattern
+      drumPattern: arrangement.drumPattern,
+      bassPattern: arrangement.bassPattern.pattern || BASS_PATTERNS.rootFifth.pattern
     };
     
-    setIsPlaying(true);
+    // Custom callback for section/chord tracking
+    let eventIndex = 0;
+    const updateVisuals = () => {
+      if (eventIndex < allEvents.length) {
+        const event = allEvents[eventIndex];
+        setCurrentSection(event.sectionIdx);
+        setCurrentChord(event.chordIdx);
+        eventIndex++;
+      }
+    };
     
-    audioEngine.playArrangement(arrangement, (chordIdx) => {
-      setCurrentChord(chordIdx);
-      
-      // Check if done
-      if (chordIdx >= currentVar.chords.length - 1) {
-        setTimeout(() => {
-          setIsPlaying(false);
-          setCurrentChord(-1);
-        }, 3000);
+    // Start playback
+    const totalDuration = audioEngine.playArrangement(songArrangement, (chordIdx) => {
+      if (chordIdx < allEvents.length) {
+        const event = allEvents[chordIdx];
+        setCurrentSection(event.sectionIdx);
+        setCurrentChord(event.chordIdx);
       }
     });
-  }, [isPlaying, currentVar, instruments, reverbAmount]);
+    
+    // Update playback time
+    const startTime = Date.now();
+    intervalRef.current = setInterval(() => {
+      const elapsed = (Date.now() - startTime) / 1000;
+      setPlaybackTime(elapsed);
+      
+      if (elapsed >= arrangement.durationSeconds) {
+        stopPlayback();
+      }
+    }, 100);
+    
+    // Auto-stop at end
+    playbackRef.current = setTimeout(() => {
+      stopPlayback();
+    }, arrangement.durationSeconds * 1000 + 1000);
+    
+  }, [isPlaying, arrangement, instruments, reverbAmount, stopPlayback]);
 
-  // Stop
-  const handleStop = useCallback(() => {
-    audioEngine.stopAll();
-    setIsPlaying(false);
-    setCurrentChord(-1);
-  }, []);
-
-  // Export MIDI
+  // Export full song MIDI
   const exportMidi = useCallback((type) => {
-    if (!currentVar) return;
+    if (!arrangement) return;
     
-    const arrangement = {
-      chords: currentVar.chords,
-      bpm: currentVar.bpm,
-      drumPattern: currentVar.drumPattern,
-      bassPattern: currentVar.bassPattern
-    };
+    // Flatten arrangement to events
+    const notes = [];
+    let currentBeat = 0;
     
-    const notes = generateMidiEvents(arrangement, type);
-    const midi = createMidiFile(notes, currentVar.bpm, `RnB_${type}`);
+    arrangement.sections.forEach((section) => {
+      const beatsPerBar = 4;
+      const chordsInSection = section.chords.length;
+      const barsPerChord = section.bars / chordsInSection;
+      const beatsPerChord = barsPerChord * beatsPerBar;
+      
+      section.chords.forEach((chord, chordIdx) => {
+        const chordStartBeat = currentBeat + (chordIdx * beatsPerChord);
+        
+        // Piano/Chords
+        if (type === 'piano' || type === 'chords' || type === 'full') {
+          [0, 2].forEach(beat => {
+            chord.notes.forEach(note => {
+              notes.push({
+                note,
+                start: chordStartBeat + beat,
+                duration: 1.5,
+                velocity: Math.round(70 + section.energy * 20),
+                channel: 0
+              });
+            });
+          });
+        }
+        
+        // Pad
+        if (type === 'pad' || type === 'full') {
+          chord.notes.forEach(note => {
+            notes.push({
+              note: note + 12,
+              start: chordStartBeat,
+              duration: beatsPerChord * 0.9,
+              velocity: 55,
+              channel: 1
+            });
+          });
+        }
+        
+        // Bass
+        if (type === 'bass' || type === 'full') {
+          const bassPattern = arrangement.bassPattern.pattern || BASS_PATTERNS.rootFifth.pattern;
+          bassPattern.forEach(hit => {
+            if (hit.beat < beatsPerChord) {
+              notes.push({
+                note: chord.bassNote + (hit.interval || 0),
+                start: chordStartBeat + hit.beat,
+                duration: hit.duration,
+                velocity: 90,
+                channel: 2
+              });
+            }
+          });
+        }
+        
+        // Drums
+        if (type === 'drums' || type === 'full') {
+          const drumPattern = arrangement.drumPattern;
+          
+          // Repeat pattern for each bar in chord duration
+          for (let bar = 0; bar < barsPerChord; bar++) {
+            const barStart = chordStartBeat + (bar * 4);
+            
+            drumPattern.kick.forEach(beat => {
+              notes.push({ note: 36, start: barStart + beat, duration: 0.25, velocity: 100, channel: 9 });
+            });
+            drumPattern.snare.forEach(beat => {
+              notes.push({ note: 38, start: barStart + beat, duration: 0.2, velocity: 90, channel: 9 });
+            });
+            drumPattern.hihat.forEach(beat => {
+              notes.push({ note: 42, start: barStart + beat, duration: 0.1, velocity: 65, channel: 9 });
+            });
+          }
+        }
+      });
+      
+      currentBeat += section.bars * beatsPerBar;
+    });
+    
     const keyName = NOTES[keyTranspose] || 'C';
-    downloadMidi(midi, `rnb_${selectedArtist}_${type}_${keyName}_v${selectedVar + 1}.mid`);
-  }, [currentVar, selectedArtist, selectedVar, keyTranspose]);
+    const midi = createMidiFile(notes, arrangement.tempo, `${arrangement.artist}_${type}`);
+    downloadMidi(midi, `${selectedArtist}_${type}_${keyName}_${arrangement.structure.replace(/\s/g, '_')}.mid`);
+  }, [arrangement, keyTranspose, selectedArtist]);
 
   const toggleInst = (key) => setInstruments(prev => ({ ...prev, [key]: !prev[key] }));
-
   const displayKey = NOTES[keyTranspose] || 'C';
+  const artist = ARTISTS[selectedArtist];
+
+  // Format time
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
 
   return (
     <div className="app">
-      {/* Backgrounds */}
       <div className="bg bg1" />
       <div className="bg bg2" />
       
@@ -183,128 +295,80 @@ export default function App() {
         {/* Header */}
         <header className="header">
           <h1>R&B Producer Pro</h1>
-          <p>Professional Chord Progressions • Real Voicings • MIDI Export</p>
+          <p>Full Song Structures • Artist Styles • Professional Production</p>
           
           {!audioReady && (
             <button className="btn-enable" onClick={initAudio} disabled={isLoading}>
-              {isLoading ? 'Loading...' : '🎹 Enable Audio'}
+              {isLoading ? 'Loading Instruments...' : '🎹 Enable Audio'}
             </button>
           )}
         </header>
 
         {/* Artist Selection */}
-        <section className="panel artist-panel">
-          <h3 className="label">Artist Style</h3>
+        <section className="panel">
+          <h3 className="label">Select Artist Style</h3>
           <div className="artist-grid">
-            {Object.entries(ARTIST_PROGRESSIONS).map(([key, art]) => (
+            {Object.entries(ARTISTS).map(([key, art]) => (
               <button 
                 key={key}
                 className={`artist-btn ${selectedArtist === key ? 'active' : ''}`}
-                style={{ 
-                  '--color': art.color,
-                  borderColor: selectedArtist === key ? art.color : 'rgba(255,255,255,0.08)'
-                }}
-                onClick={() => { setSelectedArtist(key); setSelectedProgIdx(0); }}
+                style={{ '--color': art.color }}
+                onClick={() => setSelectedArtist(key)}
               >
                 <strong>{art.name}</strong>
                 <span>{art.description}</span>
+                <div className="artist-tags">
+                  {art.style_tags.slice(0, 3).map(tag => (
+                    <span key={tag} className="tag">{tag}</span>
+                  ))}
+                </div>
               </button>
             ))}
           </div>
         </section>
 
-        {/* Main Controls */}
-        <div className="main-grid">
-          {/* Settings */}
-          <section className="panel">
-            <h3 className="label">Settings</h3>
-            
-            <div className="control-group">
-              <div className="control-label">Key: <span className="value purple">{displayKey}</span></div>
-              <div className="key-grid">
-                {NOTES.map((note, i) => (
-                  <button 
-                    key={note}
-                    className={`key-btn ${keyTranspose === i ? 'active' : ''}`}
-                    onClick={() => setKeyTranspose(i)}
-                  >
-                    {note}
-                  </button>
-                ))}
-              </div>
-            </div>
-            
-            <div className="control-group">
-              <div className="control-label">BPM: <span className="value pink">{bpm}</span></div>
-              <input type="range" min="60" max="110" value={bpm} onChange={e => setBpm(+e.target.value)} />
-            </div>
-            
-            <div className="control-group">
-              <div className="control-label">Swing: <span className="value orange">{Math.round(swing * 100)}%</span></div>
-              <input type="range" min="0" max="0.3" step="0.01" value={swing} onChange={e => setSwing(+e.target.value)} />
-            </div>
-            
-            <div className="control-group">
-              <div className="control-label">Reverb: <span className="value cyan">{Math.round(reverbAmount * 100)}%</span></div>
-              <input type="range" min="0" max="0.5" step="0.05" value={reverbAmount} onChange={e => setReverbAmount(+e.target.value)} />
-            </div>
-          </section>
-
-          {/* Progressions */}
-          <section className="panel">
-            <h3 className="label">{artist?.name} Progressions</h3>
-            <div className="prog-grid">
-              {artist?.progressions.map((prog, i) => (
+        {/* Controls Row */}
+        <div className="controls-row">
+          {/* Key Selection */}
+          <div className="panel control-panel">
+            <h3 className="label">Key: <span className="value">{displayKey}</span></h3>
+            <div className="key-grid">
+              {NOTES.map((note, i) => (
                 <button 
-                  key={prog.name}
-                  className={`prog-btn ${selectedProgIdx === i ? 'active' : ''}`}
-                  style={{ '--color': artist.color }}
-                  onClick={() => setSelectedProgIdx(i)}
+                  key={note}
+                  className={`key-btn ${keyTranspose === i ? 'active' : ''}`}
+                  onClick={() => setKeyTranspose(i)}
                 >
-                  <strong>{prog.name}</strong>
-                  <span className="desc">{prog.desc}</span>
-                  <span className="chords">{prog.chords.join(' → ')}</span>
+                  {note}
                 </button>
               ))}
             </div>
-          </section>
+          </div>
 
-          {/* Info */}
-          <section className="panel">
-            <h3 className="label">Variation Info</h3>
-            {currentVar && (
-              <div className="info-list">
-                <div>Key: <span className="purple">{displayKey}</span></div>
-                <div>BPM: <span className="pink">{currentVar.bpm}</span></div>
-                <div>Swing: <span className="orange">{Math.round(currentVar.swing * 100)}%</span></div>
-                <div>Drums: <span className="red">{currentVar.drumPatternName}</span></div>
-                <div>Bass: <span className="green">{currentVar.bassPatternName}</span></div>
+          {/* Song Info */}
+          {arrangement && (
+            <div className="panel control-panel song-info">
+              <h3 className="label">Song Info</h3>
+              <div className="info-grid">
+                <div>Structure: <span>{arrangement.structure}</span></div>
+                <div>Tempo: <span>{arrangement.tempo} BPM</span></div>
+                <div>Duration: <span>{arrangement.durationFormatted}</span></div>
+                <div>Sections: <span>{arrangement.sections.length}</span></div>
               </div>
-            )}
-          </section>
-        </div>
+            </div>
+          )}
 
-        {/* Variations */}
-        <section className="panel">
-          <div className="panel-header">
-            <h3 className="label">Variations <span className="gen-count">#{genCount}</span></h3>
-            <button className="btn-regen" onClick={generateVariations}>🎲 Regenerate</button>
+          {/* Reverb */}
+          <div className="panel control-panel">
+            <h3 className="label">Reverb: <span className="value">{Math.round(reverbAmount * 100)}%</span></h3>
+            <input 
+              type="range" 
+              min="0" max="0.5" step="0.05" 
+              value={reverbAmount} 
+              onChange={e => setReverbAmount(+e.target.value)} 
+            />
           </div>
-          
-          <div className="var-grid">
-            {variations.map((v, i) => (
-              <button 
-                key={v.id}
-                className={`var-btn ${selectedVar === i ? 'active' : ''}`}
-                onClick={() => setSelectedVar(i)}
-              >
-                <strong>{v.name}</strong>
-                <span>{v.bpm} BPM</span>
-                <span className="small">{v.drumPatternName}</span>
-              </button>
-            ))}
-          </div>
-        </section>
+        </div>
 
         {/* Instruments */}
         <section className="panel">
@@ -331,56 +395,123 @@ export default function App() {
           </div>
         </section>
 
-        {/* Chord Display */}
-        {currentVar && (
-          <section className="panel chord-panel">
-            <h3 className="label center">
-              {progression?.name} in {displayKey} — {currentVar.name}
-            </h3>
+        {/* Song Structure Visualization */}
+        {arrangement && (
+          <section className="panel song-panel">
+            <div className="song-header">
+              <h3 className="label">
+                {arrangement.artist} - {arrangement.structure} 
+                <span className="gen-badge">#{genCount}</span>
+              </h3>
+              <button className="btn-regen" onClick={generateNew}>🎲 New Arrangement</button>
+            </div>
             
-            <div className="chord-grid" style={{ gridTemplateColumns: `repeat(${currentVar.chords.length}, 1fr)` }}>
-              {currentVar.chords.map((chord, i) => (
+            {/* Progress bar */}
+            <div className="progress-container">
+              <div className="progress-bar">
                 <div 
-                  key={i}
-                  className={`chord-card ${currentChord === i ? 'active' : ''}`}
-                  style={{ '--color': chord.color }}
+                  className="progress-fill" 
+                  style={{ 
+                    width: `${(playbackTime / arrangement.durationSeconds) * 100}%`,
+                    background: `linear-gradient(90deg, ${artist?.color || '#8b5cf6'}, #ec4899)`
+                  }} 
+                />
+              </div>
+              <div className="progress-time">
+                <span>{formatTime(playbackTime)}</span>
+                <span>{arrangement.durationFormatted}</span>
+              </div>
+            </div>
+
+            {/* Section overview */}
+            <div className="sections-overview">
+              {arrangement.sections.map((section, idx) => (
+                <div 
+                  key={idx}
+                  className={`section-block ${currentSection === idx ? 'active' : ''}`}
+                  style={{ 
+                    flex: section.bars,
+                    '--color': artist?.color || '#8b5cf6',
+                    opacity: 0.4 + (section.energy * 0.6)
+                  }}
                 >
-                  <div className="chord-name">{chord.name}</div>
-                  <div className="chord-type">{chord.typeName}</div>
-                  <div className="chord-notes">
-                    {chord.notes.map(n => NOTES[n % 12]).join(' ')}
-                  </div>
+                  <span className="section-name">{section.name}</span>
                 </div>
               ))}
             </div>
 
+            {/* Current section detail */}
+            {arrangement.sections[currentSection >= 0 ? currentSection : 0] && (
+              <div className="current-section">
+                <h4 style={{ color: artist?.color }}>
+                  {arrangement.sections[currentSection >= 0 ? currentSection : 0].name}
+                </h4>
+                <p>{arrangement.sections[currentSection >= 0 ? currentSection : 0].description}</p>
+                
+                <div className="chord-display">
+                  {arrangement.sections[currentSection >= 0 ? currentSection : 0].chords.map((chord, idx) => (
+                    <div 
+                      key={idx}
+                      className={`chord-card ${currentSection >= 0 && currentChord === idx ? 'active' : ''}`}
+                      style={{ '--color': chord.color }}
+                    >
+                      <div className="chord-name">{chord.name}</div>
+                      <div className="chord-type">{chord.typeName}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Play controls */}
             <div className="play-controls">
               <button 
                 className={`btn-play ${isPlaying ? 'stop' : ''}`}
-                onClick={isPlaying ? handleStop : handlePlay}
+                onClick={handlePlay}
                 disabled={!audioReady}
               >
-                {isPlaying ? '■ Stop' : '▶ Play'}
+                {isPlaying ? '■ Stop' : '▶ Play Full Song'}
               </button>
-              <button className="btn-shuffle" onClick={generateVariations}>
-                🔀 New Variations
+              <button className="btn-shuffle" onClick={generateNew}>
+                🔀 Generate New
               </button>
+            </div>
+          </section>
+        )}
+
+        {/* Full song structure breakdown */}
+        {arrangement && (
+          <section className="panel structure-panel">
+            <h3 className="label">Full Song Structure</h3>
+            <div className="structure-timeline">
+              {arrangement.sections.map((section, idx) => (
+                <div 
+                  key={idx} 
+                  className={`structure-section ${currentSection === idx ? 'playing' : ''}`}
+                  style={{ '--color': artist?.color }}
+                >
+                  <div className="section-header">
+                    <span className="section-num">{idx + 1}</span>
+                    <span className="section-title">{section.name}</span>
+                    <span className="section-bars">{section.bars} bars</span>
+                  </div>
+                  <div className="section-chords">
+                    {section.progression.join(' → ')}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )}
 
         {/* Export */}
         <section className="panel export-panel">
-          <h3 className="label center">Export MIDI</h3>
-          
+          <h3 className="label">Export Full Song MIDI</h3>
           <div className="export-grid">
             {[
               { type: 'piano', label: '🎹 Piano', color: '#8b5cf6' },
               { type: 'pad', label: '🎛️ Pad', color: '#14b8a6' },
-              { type: 'strings', label: '🎻 Strings', color: '#06b6d4' },
-              { type: 'guitar', label: '🎸 Guitar', color: '#22c55e' },
               { type: 'bass', label: '🎸 Bass', color: '#f97316' },
-              { type: 'melody', label: '🎵 Melody', color: '#ec4899' },
               { type: 'drums', label: '🥁 Drums', color: '#ef4444' },
             ].map(exp => (
               <button 
@@ -393,15 +524,9 @@ export default function App() {
               </button>
             ))}
           </div>
-          
-          <button 
-            className="btn-export-full"
-            onClick={() => exportMidi('full')}
-          >
-            📦 Export Full Track
+          <button className="btn-export-full" onClick={() => exportMidi('full')}>
+            📦 Export Complete Song ({arrangement?.durationFormatted})
           </button>
-          
-          <p className="export-hint">Export any instrument separately or full arrangement</p>
         </section>
       </div>
     </div>
