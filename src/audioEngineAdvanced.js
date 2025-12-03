@@ -14,6 +14,7 @@ class AdvancedRnBAudioEngine {
     this.parts = {};
     this.isPlaying = false;
     this.isStopping = false;
+    this.isDisposing = false;
     this.currentVariation = null;
 
     // Sample system
@@ -49,7 +50,7 @@ class AdvancedRnBAudioEngine {
       }
 
       // High-quality audio context settings for smooth playback
-      context.lookAhead = 0.2; // Increased for smoother playback
+      context.lookAhead = 0.3; // Increased even more to prevent glitches
       // Note: latencyHint is read-only, cannot be set here
       console.log('✅ Audio context configured (lookAhead:', context.lookAhead, ', latencyHint:', context.latencyHint, ')');
 
@@ -849,7 +850,7 @@ class AdvancedRnBAudioEngine {
         console.warn('Error disposing parts:', e);
       }
       this.isStopping = false;
-    }, 0);
+    }, 50); // Increased from 0 to 50ms to reduce glitching
   }
 
   /**
@@ -866,7 +867,8 @@ class AdvancedRnBAudioEngine {
     this.instruments = {};
     this.effects = {};
 
-    // Defer disposal to prevent UI freeze
+    // Defer disposal even longer to ensure it doesn't interfere with playback
+    this.isDisposing = true;
     setTimeout(() => {
       try {
         Object.values(oldInstruments).forEach(inst => {
@@ -890,10 +892,12 @@ class AdvancedRnBAudioEngine {
         });
 
         console.log('✅ Old instruments disposed');
+        this.isDisposing = false;
       } catch (e) {
         console.error('Disposal error:', e);
+        this.isDisposing = false;
       }
-    }, 0);
+    }, 100); // Increased from 0 to 100ms to further reduce interference
   }
 
   /**

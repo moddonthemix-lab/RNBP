@@ -5,7 +5,7 @@ import {
   ARTISTS, SONG_STRUCTURES, DRUM_PATTERNS, BASS_PATTERNS, NOTES,
   generateSongArrangement, SECTION_TYPES
 } from './songStructure';
-import { createMidiFile, downloadMidi, generateMidiEvents } from './midiExport';
+import { createMidiFile, downloadMidi, generateMidiEvents, exportAllInstrumentsMidi } from './midiExport';
 import { SCALES } from './musicTheory';
 
 export default function App() {
@@ -242,6 +242,22 @@ export default function App() {
     }, arrangement.durationSeconds * 1000 + 1000);
     
   }, [isPlaying, arrangement, instruments, reverbAmount, stopPlayback]);
+
+  // Export all instruments as separate MIDI files
+  const exportAllMidi = useCallback(() => {
+    if (!arrangement) return;
+
+    // Create a simplified arrangement object with the necessary data
+    const simplifiedArrangement = {
+      chords: arrangement.sections.flatMap(section => section.chords),
+      bpm: arrangement.tempo,
+      drumPattern: arrangement.drumPattern,
+      bassPattern: arrangement.bassPattern.pattern || BASS_PATTERNS.rootFifth.pattern,
+      artist: arrangement.artist
+    };
+
+    exportAllInstrumentsMidi(simplifiedArrangement);
+  }, [arrangement]);
 
   // Export full song MIDI
   const exportMidi = useCallback((type) => {
@@ -651,15 +667,34 @@ export default function App() {
 
         {/* Export */}
         <section className="panel export-panel">
-          <h3 className="label">Export Full Song MIDI</h3>
+          <h3 className="label">Export MIDI Files</h3>
+
+          {/* Export All Button - PROMINENT */}
+          <button
+            className="btn-export-full"
+            onClick={exportAllMidi}
+            style={{
+              marginBottom: '16px',
+              background: 'linear-gradient(135deg, #8b5cf6, #ec4899)',
+              fontSize: '1.05em'
+            }}
+          >
+            🎼 Export ALL Instruments (8 Files) - Multi-Track Ready
+          </button>
+
+          <h4 className="label" style={{ fontSize: '0.9em', marginTop: '12px', marginBottom: '8px' }}>Or Export Individual Parts:</h4>
           <div className="export-grid">
             {[
               { type: 'piano', label: '🎹 Piano', color: '#8b5cf6' },
               { type: 'pad', label: '🎛️ Pad', color: '#14b8a6' },
+              { type: 'strings', label: '🎻 Strings', color: '#06b6d4' },
+              { type: 'guitar', label: '🎸 Guitar', color: '#22c55e' },
               { type: 'bass', label: '🎸 Bass', color: '#f97316' },
+              { type: 'melody', label: '🎵 Melody', color: '#ec4899' },
               { type: 'drums', label: '🥁 Drums', color: '#ef4444' },
+              { type: 'full', label: '📦 Full Mix', color: '#6366f1' },
             ].map(exp => (
-              <button 
+              <button
                 key={exp.type}
                 className="export-btn"
                 style={{ '--color': exp.color }}
@@ -669,9 +704,6 @@ export default function App() {
               </button>
             ))}
           </div>
-          <button className="btn-export-full" onClick={() => exportMidi('full')}>
-            📦 Export Complete Song ({arrangement?.durationFormatted})
-          </button>
         </section>
       </div>
     </div>

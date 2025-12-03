@@ -140,6 +140,41 @@ export const downloadMidi = (data, filename) => {
 };
 
 /**
+ * Export all instrument parts as separate MIDI files
+ */
+export const exportAllInstrumentsMidi = (arrangement) => {
+  const { bpm } = arrangement;
+  const artist = arrangement.artist || 'R&B';
+  const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+
+  const instruments = [
+    { type: 'piano', name: `${artist}_Piano_${timestamp}` },
+    { type: 'pad', name: `${artist}_Pad_${timestamp}` },
+    { type: 'strings', name: `${artist}_Strings_${timestamp}` },
+    { type: 'guitar', name: `${artist}_Guitar_${timestamp}` },
+    { type: 'bass', name: `${artist}_Bass_${timestamp}` },
+    { type: 'melody', name: `${artist}_Melody_${timestamp}` },
+    { type: 'drums', name: `${artist}_Drums_${timestamp}` },
+    { type: 'full', name: `${artist}_Full_Mix_${timestamp}` }
+  ];
+
+  console.log('🎵 Exporting MIDI files for all instruments...');
+
+  instruments.forEach(({ type, name }) => {
+    const notes = generateMidiEvents(arrangement, type);
+    if (notes.length > 0) {
+      const midiData = createMidiFile(notes, bpm, name);
+      downloadMidi(midiData, `${name}.mid`);
+      console.log(`✅ Exported: ${name}.mid (${notes.length} notes)`);
+    } else {
+      console.log(`⚠️ Skipped ${name} - no notes`);
+    }
+  });
+
+  console.log('✅ All MIDI files exported!');
+};
+
+/**
  * Generate MIDI events from arrangement
  */
 export const generateMidiEvents = (arrangement, type = 'full') => {
