@@ -47,49 +47,52 @@ class AdvancedRnBAudioEngine {
         await context.resume();
       }
 
-      // High-quality audio context settings
-      context.lookAhead = 0.1;
+      // High-quality audio context settings for smooth playback
+      context.lookAhead = 0.2; // Increased for smoother playback
       // Note: latencyHint is read-only, cannot be set here
       console.log('✅ Audio context configured (lookAhead:', context.lookAhead, ', latencyHint:', context.latencyHint, ')');
 
       // ============================================
-      // PROFESSIONAL MASTER CHAIN - with error recovery
+      // PROFESSIONAL MASTER CHAIN - Smooth & Clean
       // ============================================
       console.log('Creating master chain...');
 
-      this.masterGain = new Tone.Gain(0.75).toDestination();
-      console.log('✓ Master gain');
+      // Reduced master gain to prevent clipping/distortion
+      this.masterGain = new Tone.Gain(0.5).toDestination(); // Reduced from 0.75
+      console.log('✓ Master gain (0.5 - prevents distortion)');
 
-      this.masterLimiter = new Tone.Limiter(-1).connect(this.masterGain);
+      this.masterLimiter = new Tone.Limiter(-3).connect(this.masterGain); // Increased threshold to -3
       console.log('✓ Limiter');
 
-      // Simplified master chain for better compatibility
+      // Gentler compression for smoother sound
       try {
         this.multibandComp = new Tone.MultibandCompressor({
           lowFrequency: 250,
           highFrequency: 2000,
-          low: { threshold: -20, ratio: 6 },
-          mid: { threshold: -15, ratio: 4 },
-          high: { threshold: -12, ratio: 3 }
+          low: { threshold: -30, ratio: 3 },    // Gentler - reduced from -20, 6
+          mid: { threshold: -25, ratio: 3 },    // Gentler - reduced from -15, 4
+          high: { threshold: -20, ratio: 2 }    // Gentler - reduced from -12, 3
         }).connect(this.masterLimiter);
-        console.log('✓ Multiband compressor');
+        console.log('✓ Multiband compressor (gentle)');
       } catch (e) {
         console.warn('Multiband compressor failed, using simple compressor:', e);
         this.multibandComp = new Tone.Compressor({
-          threshold: -20,
-          ratio: 4
+          threshold: -25,
+          ratio: 3,
+          attack: 0.003,
+          release: 0.25
         }).connect(this.masterLimiter);
       }
 
-      this.stereoWidener = new Tone.StereoWidener(0.7).connect(this.multibandComp);
+      this.stereoWidener = new Tone.StereoWidener(0.5).connect(this.multibandComp); // Reduced from 0.7
       console.log('✓ Stereo widener');
 
-      // Master reverb with timeout
+      // Master reverb - smoother, less harsh
       console.log('🎛️ Generating reverb (this may take a few seconds)...');
       try {
         this.masterReverb = new Tone.Reverb({
-          decay: 2.0, // Reduced for faster generation
-          wet: 0.25,
+          decay: 1.8,    // Reduced from 2.0
+          wet: 0.2,      // Reduced from 0.25
           preDelay: 0.01
         }).connect(this.stereoWidener);
 
@@ -105,18 +108,18 @@ class AdvancedRnBAudioEngine {
         console.warn('Reverb generation failed, using simpler reverb:', e);
         // Fallback to simpler reverb
         this.masterReverb = new Tone.Reverb({
-          decay: 1.5,
-          wet: 0.2
+          decay: 1.2,
+          wet: 0.15
         }).connect(this.stereoWidener);
         await this.masterReverb.generate();
       }
 
-      // Saturation for warmth
+      // Reduced saturation for cleaner sound
       this.masterSaturation = new Tone.Distortion({
-        distortion: 0.4,
-        wet: 0.3
+        distortion: 0.2,  // Reduced from 0.4
+        wet: 0.15         // Reduced from 0.3
       }).connect(this.masterReverb);
-      console.log('✓ Saturation');
+      console.log('✓ Saturation (gentle)');
 
       // Dry/wet mixer
       this.masterMixer = new Tone.Gain(1.0).connect(this.masterSaturation);

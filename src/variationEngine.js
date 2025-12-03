@@ -72,41 +72,41 @@ export const ARP_PATTERNS = {
 };
 
 /**
- * Generate unique piano variations
+ * Generate unique piano variations - SMOOTH & CLEAN
  */
 export const generatePianoVariation = () => {
   return {
-    harmonicity: rand(2.5, 4.0),
-    modulationIndex: rand(8, 14),
-    attackTime: rand(0.005, 0.02),
-    decayTime: rand(0.3, 0.7),
-    sustain: rand(0.5, 0.7),
-    release: rand(1.0, 2.5),
-    tremoloRate: rand(3, 6),
-    tremoloDepth: rand(0.2, 0.4),
-    chorusDepth: rand(0.3, 0.5),
-    volume: rand(-8, -4),
-    brightness: rand(0.6, 1.0) // Filter multiplier
+    harmonicity: rand(2.8, 3.5),        // Tightened range for smoother sound
+    modulationIndex: rand(8, 12),       // Reduced from 14
+    attackTime: rand(0.01, 0.03),       // Slower attack for smoother
+    decayTime: rand(0.4, 0.8),          // Longer decay
+    sustain: rand(0.6, 0.8),            // Higher sustain
+    release: rand(1.5, 2.5),            // Longer release
+    tremoloRate: rand(3.5, 5),          // Slower tremolo
+    tremoloDepth: rand(0.15, 0.3),      // Less tremolo
+    chorusDepth: rand(0.25, 0.4),       // Reduced chorus
+    volume: rand(-12, -8),              // Much quieter!
+    brightness: rand(0.7, 0.95)         // Darker, less harsh
   };
 };
 
 /**
- * Generate unique pad variations
+ * Generate unique pad variations - SMOOTH & LUSH
  */
 export const generatePadVariation = () => {
-  const oscTypes = ['sawtooth', 'triangle', 'square', 'sine'];
+  const oscTypes = ['sawtooth', 'triangle', 'sine']; // Removed square (too harsh)
   return {
     oscillatorType: choice(oscTypes),
-    attack: rand(0.4, 1.2),
-    decay: rand(0.2, 0.5),
-    sustain: rand(0.7, 0.9),
-    release: rand(2.0, 4.0),
-    filterFreq: rand(600, 1200),
-    filterQ: rand(1, 4),
-    chorusRate: rand(0.5, 2.0),
-    chorusDepth: rand(0.4, 0.8),
-    volume: rand(-16, -12),
-    detune: rand(-10, 10)
+    attack: rand(0.6, 1.5),           // Slower attack
+    decay: rand(0.3, 0.6),
+    sustain: rand(0.75, 0.9),         // Higher sustain
+    release: rand(2.5, 4.5),          // Longer release
+    filterFreq: rand(800, 1500),      // Higher, less muddy
+    filterQ: rand(0.5, 2),            // Lower Q for smoother
+    chorusRate: rand(0.3, 1.5),       // Slower chorus
+    chorusDepth: rand(0.3, 0.6),
+    volume: rand(-20, -16),           // Much quieter!
+    detune: rand(-5, 5)               // Less detuning
   };
 };
 
@@ -130,23 +130,23 @@ export const generateLeadVariation = () => {
 };
 
 /**
- * Generate unique bass variations
+ * Generate unique bass variations - SMOOTH & DEEP
  */
 export const generateBassVariation = () => {
-  const oscTypes = ['sawtooth', 'square', 'triangle'];
+  const oscTypes = ['sawtooth', 'triangle']; // Removed square (too harsh)
   return {
     oscillatorType: choice(oscTypes),
-    attack: rand(0.01, 0.04),
-    decay: rand(0.15, 0.3),
-    sustain: rand(0.7, 0.9),
-    release: rand(0.3, 0.7),
-    filterFreq: rand(250, 400),
-    filterQ: rand(3, 6),
-    filterAttack: rand(0.01, 0.03),
-    filterDecay: rand(0.15, 0.25),
-    filterSustain: rand(0.4, 0.6),
-    volume: rand(-6, -2),
-    subMix: rand(0.3, 0.7) // How much sub bass to add
+    attack: rand(0.02, 0.05),         // Slower attack
+    decay: rand(0.2, 0.35),
+    sustain: rand(0.75, 0.9),         // Higher sustain
+    release: rand(0.4, 0.8),
+    filterFreq: rand(200, 350),       // Lower cutoff
+    filterQ: rand(2, 4),              // Lower Q
+    filterAttack: rand(0.02, 0.04),
+    filterDecay: rand(0.2, 0.3),
+    filterSustain: rand(0.5, 0.7),
+    volume: rand(-10, -6),            // Quieter
+    subMix: rand(0.4, 0.7)
   };
 };
 
@@ -186,41 +186,41 @@ export const generateStringsVariation = () => {
 };
 
 /**
- * Generate drum variations
+ * Generate drum variations - CLEANER & PUNCHIER
  */
 export const generateDrumVariation = () => {
   return {
     kick: {
-      pitchDecay: rand(0.04, 0.08),
-      octaves: rand(5, 8),
+      pitchDecay: rand(0.05, 0.08),
+      octaves: rand(6, 8),
       attack: rand(0.001, 0.003),
       decay: rand(0.4, 0.7),
-      volume: rand(-4, 0)
+      volume: rand(-6, -2)            // Quieter kick
     },
     snare: {
-      noiseType: choice(['white', 'pink', 'brown']),
-      attack: rand(0.001, 0.005),
-      decay: rand(0.12, 0.2),
-      filterFreq: rand(4000, 6000),
-      volume: rand(-12, -8),
-      reverbMix: rand(0.2, 0.4)
+      noiseType: choice(['white', 'pink']), // Removed brown (too dull)
+      attack: rand(0.001, 0.003),
+      decay: rand(0.1, 0.18),
+      filterFreq: rand(3000, 5000),    // Lower for less harsh
+      volume: rand(-16, -12),          // Quieter snare
+      reverbMix: rand(0.15, 0.3)       // Less reverb
     },
     hihat: {
-      frequency: rand(250, 400),
-      harmonicity: rand(4.5, 5.5),
-      modulationIndex: rand(28, 36),
+      frequency: rand(280, 350),       // Lower frequency
+      harmonicity: rand(4.8, 5.3),
+      modulationIndex: rand(30, 35),
       attack: rand(0.001, 0.002),
-      decay: rand(0.04, 0.08),
-      volume: rand(-22, -18)
+      decay: rand(0.03, 0.06),
+      volume: rand(-26, -22)           // Much quieter hihat
     },
     openHat: {
-      frequency: rand(250, 400),
-      harmonicity: rand(4.5, 5.5),
-      modulationIndex: rand(28, 36),
+      frequency: rand(280, 350),
+      harmonicity: rand(4.8, 5.3),
+      modulationIndex: rand(30, 35),
       attack: rand(0.001, 0.002),
-      decay: rand(0.25, 0.4),
-      volume: rand(-24, -20),
-      reverbMix: rand(0.3, 0.5)
+      decay: rand(0.2, 0.35),
+      volume: rand(-28, -24),          // Much quieter
+      reverbMix: rand(0.2, 0.4)
     }
   };
 };
