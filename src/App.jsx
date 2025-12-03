@@ -82,8 +82,13 @@ export default function App() {
 
     setIsLoading(true);
     try {
-      // Initialize audio first if not already done
-      await initAudio();
+      // Initialize audio first if not already done (required for sample decoding)
+      const ready = await initAudio();
+      if (!ready) {
+        alert('❌ Could not initialize audio. Please try clicking Play first.');
+        setIsLoading(false);
+        return;
+      }
 
       const sampleManager = audioEngineAdvanced.getSampleManager();
       const loaded = await sampleManager.loadSamples(files, category);
@@ -95,7 +100,7 @@ export default function App() {
       alert(`❌ Error loading samples: ${error.message}`);
     }
     setIsLoading(false);
-  }, []);
+  }, [audioReady]);
 
   // Stop playback
   const stopPlayback = useCallback(() => {
@@ -117,12 +122,19 @@ export default function App() {
       stopPlayback();
       return;
     }
-    
+
     if (!arrangement) return;
-    
+
+    // Auto-initialize audio on first play
+    setIsLoading(true);
     const ready = await initAudio();
-    if (!ready) return;
-    
+    setIsLoading(false);
+
+    if (!ready) {
+      alert('❌ Could not initialize audio. Please refresh the page and try again.');
+      return;
+    }
+
     setIsPlaying(true);
     setPlaybackTime(0);
 
@@ -326,16 +338,16 @@ export default function App() {
           <h1>R&B Producer Pro</h1>
           <p>Multi-Platinum Quality • 20+ Scales • Unique Variations • Custom Samples</p>
 
-          {!audioReady && (
-            <button className="btn-enable" onClick={initAudio} disabled={isLoading}>
-              {isLoading ? 'Loading Instruments...' : '🎹 Enable Audio'}
-            </button>
-          )}
-
           {audioReady && arrangement && (
             <div style={{ marginTop: '10px', fontSize: '0.85em', opacity: 0.8 }}>
-              Variation ID: #{arrangement.variationId?.toString().slice(0, 8)} •
+              🎹 Audio Ready • Variation ID: #{arrangement.variationId?.toString().slice(0, 8)} •
               {Object.keys(arrangement.scales || {}).length} Scales Active
+            </div>
+          )}
+
+          {!audioReady && (
+            <div style={{ marginTop: '10px', fontSize: '0.85em', color: 'var(--text-dim)' }}>
+              Click Play to start - audio will initialize automatically ▶️
             </div>
           )}
         </header>
@@ -566,17 +578,23 @@ export default function App() {
 
             {/* Play controls */}
             <div className="play-controls">
-              <button 
+              <button
                 className={`btn-play ${isPlaying ? 'stop' : ''}`}
                 onClick={handlePlay}
-                disabled={!audioReady}
+                disabled={isLoading}
               >
-                {isPlaying ? '■ Stop' : '▶ Play Full Song'}
+                {isLoading ? '⏳ Initializing Audio...' : isPlaying ? '■ Stop' : '▶ Play Full Song'}
               </button>
-              <button className="btn-shuffle" onClick={generateNew}>
+              <button className="btn-shuffle" onClick={generateNew} disabled={isLoading}>
                 🔀 Generate New
               </button>
             </div>
+
+            {!audioReady && (
+              <div style={{ textAlign: 'center', marginTop: '12px', fontSize: '0.8em', color: 'var(--cyan)' }}>
+                💡 Click Play above - audio will initialize automatically!
+              </div>
+            )}
           </section>
         )}
 
