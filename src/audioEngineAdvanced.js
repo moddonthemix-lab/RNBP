@@ -49,8 +49,8 @@ class AdvancedRnBAudioEngine {
 
       // High-quality audio context settings
       context.lookAhead = 0.1;
-      context.latencyHint = 'playback';
-      console.log('✅ Audio context configured');
+      // Note: latencyHint is read-only, cannot be set here
+      console.log('✅ Audio context configured (lookAhead:', context.lookAhead, ', latencyHint:', context.latencyHint, ')');
 
       // ============================================
       // PROFESSIONAL MASTER CHAIN - with error recovery
