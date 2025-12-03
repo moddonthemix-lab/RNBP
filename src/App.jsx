@@ -62,15 +62,28 @@ export default function App() {
   // Init audio
   const initAudio = async () => {
     if (audioReady) return true;
+
+    console.log('initAudio called');
     setIsLoading(true);
+
     try {
+      console.log('Calling audioEngineAdvanced.init()...');
       await audioEngineAdvanced.init();
+      console.log('Init successful!');
       setAudioReady(true);
       setIsLoading(false);
       return true;
     } catch (e) {
-      console.error('Audio init error:', e);
+      console.error('❌ Audio init error:', e);
+      console.error('Error type:', e.constructor.name);
+      console.error('Error message:', e.message);
+
       setIsLoading(false);
+
+      // Show more detailed error to user
+      const errorMsg = e.message || 'Unknown error';
+      alert(`❌ Audio initialization failed:\n\n${errorMsg}\n\nPlease try:\n1. Refresh the page\n2. Use Chrome/Firefox\n3. Check browser console (F12) for details`);
+
       return false;
     }
   };
@@ -126,12 +139,16 @@ export default function App() {
     if (!arrangement) return;
 
     // Auto-initialize audio on first play
+    console.log('handlePlay: Starting audio initialization...');
     setIsLoading(true);
+
     const ready = await initAudio();
+
     setIsLoading(false);
+    console.log('handlePlay: Audio ready?', ready);
 
     if (!ready) {
-      alert('❌ Could not initialize audio. Please refresh the page and try again.');
+      console.error('handlePlay: Audio initialization failed');
       return;
     }
 

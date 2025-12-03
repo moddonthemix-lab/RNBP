@@ -31,59 +31,122 @@ class AdvancedRnBAudioEngine {
 
     try {
       console.log('🎹 Initializing Advanced R&B Audio Engine...');
+      console.log('Browser:', navigator.userAgent);
 
+      // Start Tone.js audio context
+      console.log('Starting Tone.js...');
       await Tone.start();
       console.log('✅ Tone.js started');
 
-      // High-quality audio context settings
+      // Check context state
       const context = Tone.getContext();
+      console.log('Audio context state:', context.state);
+
+      if (context.state === 'suspended') {
+        console.log('Resuming suspended audio context...');
+        await context.resume();
+      }
+
+      // High-quality audio context settings
       context.lookAhead = 0.1;
       context.latencyHint = 'playback';
+      console.log('✅ Audio context configured');
 
       // ============================================
-      // PROFESSIONAL MASTER CHAIN
+      // PROFESSIONAL MASTER CHAIN - with error recovery
       // ============================================
+      console.log('Creating master chain...');
+
       this.masterGain = new Tone.Gain(0.75).toDestination();
+      console.log('✓ Master gain');
+
       this.masterLimiter = new Tone.Limiter(-1).connect(this.masterGain);
+      console.log('✓ Limiter');
 
-      // Multiband compressor for pro sound
-      this.multibandComp = new Tone.MultibandCompressor({
-        lowFrequency: 250,
-        highFrequency: 2000,
-        low: { threshold: -20, ratio: 6 },
-        mid: { threshold: -15, ratio: 4 },
-        high: { threshold: -12, ratio: 3 }
-      }).connect(this.masterLimiter);
+      // Simplified master chain for better compatibility
+      try {
+        this.multibandComp = new Tone.MultibandCompressor({
+          lowFrequency: 250,
+          highFrequency: 2000,
+          low: { threshold: -20, ratio: 6 },
+          mid: { threshold: -15, ratio: 4 },
+          high: { threshold: -12, ratio: 3 }
+        }).connect(this.masterLimiter);
+        console.log('✓ Multiband compressor');
+      } catch (e) {
+        console.warn('Multiband compressor failed, using simple compressor:', e);
+        this.multibandComp = new Tone.Compressor({
+          threshold: -20,
+          ratio: 4
+        }).connect(this.masterLimiter);
+      }
 
-      // Stereo widener
       this.stereoWidener = new Tone.StereoWidener(0.7).connect(this.multibandComp);
+      console.log('✓ Stereo widener');
 
-      // Master reverb
-      console.log('🎛️ Generating reverb...');
-      this.masterReverb = new Tone.Reverb({
-        decay: 3.0,
-        wet: 0.25,
-        preDelay: 0.01
-      }).connect(this.stereoWidener);
+      // Master reverb with timeout
+      console.log('🎛️ Generating reverb (this may take a few seconds)...');
+      try {
+        this.masterReverb = new Tone.Reverb({
+          decay: 2.0, // Reduced for faster generation
+          wet: 0.25,
+          preDelay: 0.01
+        }).connect(this.stereoWidener);
 
-      await this.masterReverb.generate();
-      console.log('✅ Reverb generated');
+        // Set timeout for reverb generation
+        await Promise.race([
+          this.masterReverb.generate(),
+          new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Reverb generation timeout')), 5000)
+          )
+        ]);
+        console.log('✅ Reverb generated');
+      } catch (e) {
+        console.warn('Reverb generation failed, using simpler reverb:', e);
+        // Fallback to simpler reverb
+        this.masterReverb = new Tone.Reverb({
+          decay: 1.5,
+          wet: 0.2
+        }).connect(this.stereoWidener);
+        await this.masterReverb.generate();
+      }
 
       // Saturation for warmth
       this.masterSaturation = new Tone.Distortion({
         distortion: 0.4,
         wet: 0.3
       }).connect(this.masterReverb);
+      console.log('✓ Saturation');
 
       // Dry/wet mixer
       this.masterMixer = new Tone.Gain(1.0).connect(this.masterSaturation);
       this.drySignal = new Tone.Gain(1.0).connect(this.stereoWidener);
+      console.log('✓ Mixer chains');
 
       this.initialized = true;
       console.log('✅ Advanced R&B Audio Engine initialized - Multi-Platinum Quality');
+      console.log('Audio ready to play!');
       return true;
     } catch (error) {
       console.error('❌ Audio engine initialization error:', error);
+      console.error('Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
+
+      // Try to clean up
+      try {
+        if (this.masterReverb) this.masterReverb.dispose();
+        if (this.masterSaturation) this.masterSaturation.dispose();
+        if (this.stereoWidener) this.stereoWidener.dispose();
+        if (this.multibandComp) this.multibandComp.dispose();
+        if (this.masterLimiter) this.masterLimiter.dispose();
+        if (this.masterGain) this.masterGain.dispose();
+      } catch (cleanupError) {
+        console.error('Cleanup error:', cleanupError);
+      }
+
       throw error;
     }
   }
