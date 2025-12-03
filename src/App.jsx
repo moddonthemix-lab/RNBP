@@ -82,12 +82,17 @@ export default function App() {
 
     setIsLoading(true);
     try {
+      // Initialize audio first if not already done
+      await initAudio();
+
       const sampleManager = audioEngineAdvanced.getSampleManager();
       const loaded = await sampleManager.loadSamples(files, category);
       setLoadedSamples(prev => [...prev, ...loaded]);
       console.log(`✅ Loaded ${loaded.length} samples:`, loaded.map(s => s.name));
+      alert(`✅ Successfully loaded ${loaded.length} sample(s)! They will play during your next beat.`);
     } catch (error) {
-      console.error('Sample loading error:', error);
+      console.error('❌ Sample loading error:', error);
+      alert(`❌ Error loading samples: ${error.message}`);
     }
     setIsLoading(false);
   }, []);
@@ -166,7 +171,9 @@ export default function App() {
       swing: arrangement.swing,
       instruments,
       drumPattern: arrangement.drumPattern,
-      bassPattern: arrangement.bassPattern.pattern || BASS_PATTERNS.rootFifth.pattern
+      bassPattern: arrangement.bassPattern.pattern || BASS_PATTERNS.rootFifth.pattern,
+      variation: arrangement.variation, // Pass the variation
+      customSamples: loadedSamples.length > 0 ? loadedSamples : undefined // Pass loaded samples
     };
     
     // Custom callback for section/chord tracking
@@ -426,7 +433,14 @@ export default function App() {
 
         {/* Sample Loader */}
         <section className="panel">
-          <h3 className="label">Custom Samples ({loadedSamples.length} loaded)</h3>
+          <h3 className="label">
+            Custom Samples ({loadedSamples.length} loaded)
+            {loadedSamples.length > 0 && isPlaying && (
+              <span style={{ marginLeft: '8px', color: '#22c55e', fontSize: '0.85em' }}>
+                🎵 PLAYING
+              </span>
+            )}
+          </h3>
           <div className="sample-loader">
             <input
               type="file"
@@ -437,15 +451,26 @@ export default function App() {
               id="sample-upload"
             />
             <label htmlFor="sample-upload" className="btn-upload">
-              📁 Load Samples
+              📁 Load Audio Samples (WAV, MP3, etc.)
             </label>
+            {isLoading && <div style={{ fontSize: '0.8em', color: 'var(--cyan)', marginTop: '8px' }}>Loading samples...</div>}
             {loadedSamples.length > 0 && (
-              <div className="sample-list">
-                {loadedSamples.slice(-5).map((sample, i) => (
-                  <span key={i} className="sample-chip">
-                    {sample.name}
-                  </span>
-                ))}
+              <div>
+                <div style={{ fontSize: '0.75em', color: 'var(--text-dim)', marginBottom: '8px' }}>
+                  ✅ Your samples will play during the beat!
+                </div>
+                <div className="sample-list">
+                  {loadedSamples.slice(-5).map((sample, i) => (
+                    <span key={i} className="sample-chip">
+                      {sample.name}
+                    </span>
+                  ))}
+                  {loadedSamples.length > 5 && (
+                    <span style={{ fontSize: '0.7em', color: 'var(--text-dimmer)' }}>
+                      +{loadedSamples.length - 5} more
+                    </span>
+                  )}
+                </div>
               </div>
             )}
           </div>

@@ -24,55 +24,68 @@ class AdvancedRnBAudioEngine {
   }
 
   async init() {
-    if (this.initialized) return true;
+    if (this.initialized) {
+      console.log('✅ Audio engine already initialized');
+      return true;
+    }
 
-    await Tone.start();
+    try {
+      console.log('🎹 Initializing Advanced R&B Audio Engine...');
 
-    // High-quality audio context settings
-    const context = Tone.getContext();
-    context.lookAhead = 0.1;
-    context.latencyHint = 'playback';
+      await Tone.start();
+      console.log('✅ Tone.js started');
 
-    // ============================================
-    // PROFESSIONAL MASTER CHAIN
-    // ============================================
-    this.masterGain = new Tone.Gain(0.75).toDestination();
-    this.masterLimiter = new Tone.Limiter(-1).connect(this.masterGain);
+      // High-quality audio context settings
+      const context = Tone.getContext();
+      context.lookAhead = 0.1;
+      context.latencyHint = 'playback';
 
-    // Multiband compressor for pro sound
-    this.multibandComp = new Tone.MultibandCompressor({
-      lowFrequency: 250,
-      highFrequency: 2000,
-      low: { threshold: -20, ratio: 6 },
-      mid: { threshold: -15, ratio: 4 },
-      high: { threshold: -12, ratio: 3 }
-    }).connect(this.masterLimiter);
+      // ============================================
+      // PROFESSIONAL MASTER CHAIN
+      // ============================================
+      this.masterGain = new Tone.Gain(0.75).toDestination();
+      this.masterLimiter = new Tone.Limiter(-1).connect(this.masterGain);
 
-    // Stereo widener
-    this.stereoWidener = new Tone.StereoWidener(0.7).connect(this.multibandComp);
+      // Multiband compressor for pro sound
+      this.multibandComp = new Tone.MultibandCompressor({
+        lowFrequency: 250,
+        highFrequency: 2000,
+        low: { threshold: -20, ratio: 6 },
+        mid: { threshold: -15, ratio: 4 },
+        high: { threshold: -12, ratio: 3 }
+      }).connect(this.masterLimiter);
 
-    // Master reverb
-    this.masterReverb = new Tone.Reverb({
-      decay: 3.0,
-      wet: 0.25,
-      preDelay: 0.01
-    }).connect(this.stereoWidener);
+      // Stereo widener
+      this.stereoWidener = new Tone.StereoWidener(0.7).connect(this.multibandComp);
 
-    await this.masterReverb.generate();
+      // Master reverb
+      console.log('🎛️ Generating reverb...');
+      this.masterReverb = new Tone.Reverb({
+        decay: 3.0,
+        wet: 0.25,
+        preDelay: 0.01
+      }).connect(this.stereoWidener);
 
-    // Saturation for warmth
-    this.masterSaturation = new Tone.Distortion({
-      distortion: 0.4,
-      wet: 0.3
-    }).connect(this.masterReverb);
+      await this.masterReverb.generate();
+      console.log('✅ Reverb generated');
 
-    // Dry/wet mixer
-    this.masterMixer = new Tone.Gain(1.0).connect(this.masterSaturation);
-    this.drySignal = new Tone.Gain(1.0).connect(this.stereoWidener);
+      // Saturation for warmth
+      this.masterSaturation = new Tone.Distortion({
+        distortion: 0.4,
+        wet: 0.3
+      }).connect(this.masterReverb);
 
-    this.initialized = true;
-    console.log('🎹 Advanced R&B Audio Engine initialized - Multi-Platinum Quality');
-    return true;
+      // Dry/wet mixer
+      this.masterMixer = new Tone.Gain(1.0).connect(this.masterSaturation);
+      this.drySignal = new Tone.Gain(1.0).connect(this.stereoWidener);
+
+      this.initialized = true;
+      console.log('✅ Advanced R&B Audio Engine initialized - Multi-Platinum Quality');
+      return true;
+    } catch (error) {
+      console.error('❌ Audio engine initialization error:', error);
+      throw error;
+    }
   }
 
   /**
@@ -89,6 +102,8 @@ class AdvancedRnBAudioEngine {
    */
   async createInstruments(variation) {
     if (!variation) variation = this.generateNewVariation();
+
+    console.log('🎸 Creating instruments with variation:', variation.id);
 
     // Dispose old instruments
     this.disposeInstruments();
@@ -369,7 +384,8 @@ class AdvancedRnBAudioEngine {
     this.masterReverb.decay = variation.reverbDecay;
     this.masterReverb.wet.value = variation.reverbWet;
 
-    console.log('🎹 Instruments created with unique variation');
+    console.log('✅ Instruments created with unique variation');
+    return true;
   }
 
   /**
@@ -402,14 +418,23 @@ class AdvancedRnBAudioEngine {
    * Play full arrangement with variations and samples
    */
   async playArrangement(arrangement, onChordChange) {
-    if (!this.initialized || this.isPlaying) return;
+    if (!this.initialized) {
+      console.error('❌ Audio engine not initialized');
+      return 0;
+    }
 
-    this.stopAll();
+    if (this.isPlaying) {
+      console.log('⚠️ Already playing, stopping first');
+      this.stopAll();
+    }
+
     this.isPlaying = true;
+    console.log('▶️ Starting playback...');
 
-    // Generate new variation for this playback
-    const variation = arrangement.variation || this.generateNewVariation();
-    await this.createInstruments(variation);
+    try {
+      // Generate new variation for this playback
+      const variation = arrangement.variation || this.generateNewVariation();
+      await this.createInstruments(variation);
 
     const transport = Tone.getTransport();
     transport.cancel();
@@ -580,13 +605,22 @@ class AdvancedRnBAudioEngine {
     // Schedule end
     const totalTime = chords.length * beatsPerChord * secondsPerBeat;
     transport.schedule(() => {
+      console.log('⏹️ Playback ended');
       this.stopAll();
     }, totalTime + 0.5);
 
     // Start transport
+    console.log('🎵 Starting transport...');
     transport.start('+0.1');
 
+    console.log(`✅ Playback started - Duration: ${totalTime.toFixed(2)}s`);
     return totalTime;
+
+    } catch (error) {
+      console.error('❌ Playback error:', error);
+      this.stopAll();
+      return 0;
+    }
   }
 
   /**
@@ -672,11 +706,43 @@ class AdvancedRnBAudioEngine {
   }
 
   /**
-   * Play custom samples
+   * Play custom samples - Now fully implemented!
    */
   playCustomSamples(samples, totalDuration) {
-    // TODO: Implement custom sample playback
-    // This would sequence user-loaded samples
+    if (!samples || samples.length === 0) return;
+
+    console.log(`🎵 Playing ${samples.length} custom samples over ${totalDuration}s`);
+
+    const transport = Tone.getTransport();
+    const beatsPerSample = totalDuration / samples.length;
+
+    samples.forEach((sampleInfo, index) => {
+      const startTime = index * beatsPerSample;
+
+      // Schedule sample playback
+      transport.schedule((time) => {
+        try {
+          const player = new Tone.Player({
+            url: sampleInfo.buffer,
+            loop: false,
+            fadeIn: 0.01,
+            fadeOut: 0.01
+          }).connect(this.masterMixer);
+
+          player.volume.value = -6;
+          player.start(time);
+
+          // Dispose player after playback
+          setTimeout(() => {
+            player.dispose();
+          }, (sampleInfo.duration * 1000) + 100);
+
+          console.log(`🎵 Playing sample: ${sampleInfo.name} at ${startTime}s`);
+        } catch (error) {
+          console.error(`❌ Error playing sample ${sampleInfo.name}:`, error);
+        }
+      }, startTime);
+    });
   }
 
   /**
