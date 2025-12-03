@@ -13,6 +13,7 @@ class AdvancedRnBAudioEngine {
     this.effects = {};
     this.parts = {};
     this.isPlaying = false;
+    this.isStopping = false;
     this.currentVariation = null;
 
     // Sample system
@@ -172,8 +173,8 @@ class AdvancedRnBAudioEngine {
 
     console.log('🎸 Creating instruments with variation:', variation.id);
 
-    // Dispose old instruments
-    this.disposeInstruments();
+    // Dispose old instruments asynchronously to prevent freezing
+    this.disposeInstrumentsAsync();
 
     const instruments = {};
     const effects = {};
@@ -383,7 +384,7 @@ class AdvancedRnBAudioEngine {
     instruments.kick.connect(this.drySignal);
     instruments.kick.volume.value = drumVar.kick.volume;
 
-    // Snare
+    // Snare - NO REVERB (use master reverb to prevent freezing)
     instruments.snare = new Tone.NoiseSynth({
       noise: { type: drumVar.snare.noiseType },
       envelope: {
@@ -395,13 +396,9 @@ class AdvancedRnBAudioEngine {
     });
 
     effects.snareFilter = new Tone.Filter(drumVar.snare.filterFreq, 'bandpass');
-    effects.snareReverb = new Tone.Reverb(1.2);
-    await effects.snareReverb.generate();
-    effects.snareReverb.wet.value = drumVar.snare.reverbMix;
 
     instruments.snare.connect(effects.snareFilter);
-    effects.snareFilter.connect(effects.snareReverb);
-    effects.snareReverb.connect(this.drySignal);
+    effects.snareFilter.connect(this.drySignal);
     instruments.snare.volume.value = drumVar.snare.volume;
 
     // Hi-hat closed
@@ -420,7 +417,7 @@ class AdvancedRnBAudioEngine {
     instruments.hihat.connect(this.drySignal);
     instruments.hihat.volume.value = drumVar.hihat.volume;
 
-    // Hi-hat open
+    // Hi-hat open - NO REVERB (use master reverb to prevent freezing)
     instruments.openHat = new Tone.MetalSynth({
       frequency: drumVar.openHat.frequency,
       envelope: {
@@ -434,12 +431,7 @@ class AdvancedRnBAudioEngine {
       octaves: 1.5
     });
 
-    effects.openHatReverb = new Tone.Reverb(0.8);
-    await effects.openHatReverb.generate();
-    effects.openHatReverb.wet.value = drumVar.openHat.reverbMix;
-
-    instruments.openHat.connect(effects.openHatReverb);
-    effects.openHatReverb.connect(this.drySignal);
+    instruments.openHat.connect(this.drySignal);
     instruments.openHat.volume.value = drumVar.openHat.volume;
 
     this.instruments = instruments;
@@ -813,26 +805,26 @@ class AdvancedRnBAudioEngine {
   }
 
   /**
-   * Stop all playback
+   * Stop all playback - NON-BLOCKING to prevent freezing!
    */
   stopAll() {
+    if (this.isStopping) {
+      console.log('⚠️ Already stopping, ignoring duplicate call');
+      return;
+    }
+
+    this.isStopping = true;
     this.isPlaying = false;
 
+    console.log('⏹️ Stopping playback (non-blocking)...');
+
+    // IMMEDIATE: Stop transport and release notes (fast operations)
     const transport = Tone.getTransport();
     transport.stop();
     transport.cancel();
     transport.position = 0;
 
-    // Dispose all parts
-    Object.values(this.parts).forEach(part => {
-      if (part && part.dispose) {
-        part.stop();
-        part.dispose();
-      }
-    });
-    this.parts = {};
-
-    // Release all synths
+    // IMMEDIATE: Release all synths (prevent stuck notes)
     Object.values(this.instruments).forEach(inst => {
       if (inst && inst.releaseAll) {
         inst.releaseAll();
@@ -841,37 +833,67 @@ class AdvancedRnBAudioEngine {
 
     // Stop sample sequencer
     this.sampleSequencer.stopAll();
+
+    // DEFERRED: Dispose parts asynchronously to prevent UI freeze
+    setTimeout(() => {
+      try {
+        Object.values(this.parts).forEach(part => {
+          if (part && part.dispose) {
+            part.stop();
+            part.dispose();
+          }
+        });
+        this.parts = {};
+        console.log('✅ Parts disposed');
+      } catch (e) {
+        console.warn('Error disposing parts:', e);
+      }
+      this.isStopping = false;
+    }, 0);
   }
 
   /**
-   * Dispose all instruments - CRITICAL for preventing freezing!
+   * Dispose all instruments - ASYNC to prevent freezing!
    */
-  disposeInstruments() {
-    console.log('🗑️ Disposing old instruments to free memory...');
+  disposeInstrumentsAsync() {
+    console.log('🗑️ Scheduling instrument disposal (async)...');
 
-    Object.values(this.instruments).forEach(inst => {
-      if (inst && inst.dispose) {
-        try {
-          inst.dispose();
-        } catch (e) {
-          console.warn('Error disposing instrument:', e);
-        }
-      }
-    });
+    // Store references to old instruments/effects
+    const oldInstruments = this.instruments;
+    const oldEffects = this.effects;
 
-    Object.values(this.effects).forEach(fx => {
-      if (fx && fx.dispose) {
-        try {
-          fx.dispose();
-        } catch (e) {
-          console.warn('Error disposing effect:', e);
-        }
-      }
-    });
-
+    // Immediately clear references so new instruments can be created
     this.instruments = {};
     this.effects = {};
-    console.log('✅ Memory cleaned');
+
+    // Defer disposal to prevent UI freeze
+    setTimeout(() => {
+      try {
+        Object.values(oldInstruments).forEach(inst => {
+          if (inst && inst.dispose) {
+            try {
+              inst.dispose();
+            } catch (e) {
+              console.warn('Error disposing instrument:', e);
+            }
+          }
+        });
+
+        Object.values(oldEffects).forEach(fx => {
+          if (fx && fx.dispose) {
+            try {
+              fx.dispose();
+            } catch (e) {
+              console.warn('Error disposing effect:', e);
+            }
+          }
+        });
+
+        console.log('✅ Old instruments disposed');
+      } catch (e) {
+        console.error('Disposal error:', e);
+      }
+    }, 0);
   }
 
   /**
