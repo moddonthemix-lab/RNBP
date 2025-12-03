@@ -87,31 +87,32 @@ class AdvancedRnBAudioEngine {
       this.stereoWidener = new Tone.StereoWidener(0.5).connect(this.multibandComp); // Reduced from 0.7
       console.log('✓ Stereo widener');
 
-      // Master reverb - smoother, less harsh
-      console.log('🎛️ Generating reverb (this may take a few seconds)...');
+      // Master reverb - OPTIMIZED to prevent freezing
+      console.log('🎛️ Generating reverb (optimized for performance)...');
       try {
         this.masterReverb = new Tone.Reverb({
-          decay: 1.8,    // Reduced from 2.0
-          wet: 0.2,      // Reduced from 0.25
+          decay: 1.2,    // Reduced from 1.8 - faster generation
+          wet: 0.18,     // Reduced from 0.2
           preDelay: 0.01
         }).connect(this.stereoWidener);
 
-        // Set timeout for reverb generation
+        // Set shorter timeout to prevent freezing
         await Promise.race([
           this.masterReverb.generate(),
           new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Reverb generation timeout')), 5000)
+            setTimeout(() => reject(new Error('Reverb generation timeout')), 3000) // Reduced from 5000
           )
         ]);
         console.log('✅ Reverb generated');
       } catch (e) {
-        console.warn('Reverb generation failed, using simpler reverb:', e);
-        // Fallback to simpler reverb
+        console.warn('Reverb generation timeout, using minimal reverb:', e);
+        // Ultra-fast fallback reverb
         this.masterReverb = new Tone.Reverb({
-          decay: 1.2,
-          wet: 0.15
+          decay: 0.8,
+          wet: 0.12
         }).connect(this.stereoWidener);
         await this.masterReverb.generate();
+        console.log('✅ Fast reverb generated');
       }
 
       // Reduced saturation for cleaner sound
@@ -843,23 +844,34 @@ class AdvancedRnBAudioEngine {
   }
 
   /**
-   * Dispose all instruments
+   * Dispose all instruments - CRITICAL for preventing freezing!
    */
   disposeInstruments() {
+    console.log('🗑️ Disposing old instruments to free memory...');
+
     Object.values(this.instruments).forEach(inst => {
       if (inst && inst.dispose) {
-        inst.dispose();
+        try {
+          inst.dispose();
+        } catch (e) {
+          console.warn('Error disposing instrument:', e);
+        }
       }
     });
 
     Object.values(this.effects).forEach(fx => {
       if (fx && fx.dispose) {
-        fx.dispose();
+        try {
+          fx.dispose();
+        } catch (e) {
+          console.warn('Error disposing effect:', e);
+        }
       }
     });
 
     this.instruments = {};
     this.effects = {};
+    console.log('✅ Memory cleaned');
   }
 
   /**

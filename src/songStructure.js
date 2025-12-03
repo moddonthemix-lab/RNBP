@@ -158,6 +158,27 @@ export const SONG_STRUCTURES = {
   neoSoul: {
     name: 'Neo Soul',
     sections: ['intro', 'verse', 'preChorus', 'chorus', 'verse', 'chorus', 'bridge', 'breakdown', 'chorus', 'outro']
+  },
+  // NEW STRUCTURES FOR MORE VARIETY
+  popRnB: {
+    name: 'Pop R&B',
+    sections: ['intro', 'verse', 'chorus', 'verse', 'chorus', 'bridge', 'chorus', 'chorus', 'outro']
+  },
+  altRnB: {
+    name: 'Alternative R&B',
+    sections: ['intro', 'verse', 'breakdown', 'verse', 'drop', 'bridge', 'drop', 'outro']
+  },
+  extended: {
+    name: 'Extended Mix',
+    sections: ['intro', 'verse', 'preChorus', 'chorus', 'verse', 'preChorus', 'chorus', 'bridge', 'breakdown', 'drop', 'chorus', 'outro']
+  },
+  minimalist: {
+    name: 'Minimalist',
+    sections: ['intro', 'verse', 'chorus', 'verse', 'chorus', 'outro']
+  },
+  experimental: {
+    name: 'Experimental',
+    sections: ['intro', 'breakdown', 'verse', 'drop', 'bridge', 'chorus', 'breakdown', 'outro']
   }
 };
 
@@ -678,6 +699,56 @@ export const DRUM_PATTERNS = {
     snare: [2],
     hihat: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
     openHat: [1.5]
+  },
+  // NEW PATTERNS FOR MORE VARIETY
+  boom: {
+    name: 'Boom Bap',
+    kick: [0, 0.75, 2.25],
+    snare: [1, 3],
+    hihat: [0.5, 1.5, 2.5, 3.5],
+    openHat: [2, 3.75]
+  },
+  drill: {
+    name: 'Drill',
+    kick: [0, 0.25, 0.75, 2, 2.75, 3.5],
+    snare: [1, 3],
+    hihat: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75],
+    openHat: [1.5]
+  },
+  jersey: {
+    name: 'Jersey Club',
+    kick: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
+    snare: [0.75, 1.75, 2.75, 3.75],
+    hihat: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75],
+    openHat: []
+  },
+  afrobeat: {
+    name: 'Afrobeat',
+    kick: [0, 0.75, 1.5, 2.25, 3],
+    snare: [1, 3],
+    hihat: [0, 0.33, 0.67, 1, 1.33, 1.67, 2, 2.33, 2.67, 3, 3.33, 3.67],
+    openHat: [1.67, 3.67]
+  },
+  shuffleBeat: {
+    name: 'Shuffle',
+    kick: [0, 2],
+    snare: [1, 3],
+    hihat: [0, 0.67, 1, 1.67, 2, 2.67, 3, 3.67],
+    openHat: [3.33]
+  },
+  doubleTime: {
+    name: 'Double Time',
+    kick: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
+    snare: [0.5, 1.5, 2.5, 3.5],
+    hihat: [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75],
+    openHat: [1.75, 3.75]
+  },
+  reggaeton: {
+    name: 'Reggaeton',
+    kick: [0, 0.5, 0.75, 1.5, 2.25, 3],
+    snare: [1, 3],
+    hihat: [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5],
+    openHat: [2]
   }
 };
 
@@ -726,6 +797,58 @@ export const BASS_PATTERNS = {
       { beat: 0, duration: 1.8, interval: 0 },
       { beat: 2.5, duration: 0.3, interval: 0 },
       { beat: 3, duration: 0.8, interval: -5 }
+    ]
+  },
+  // NEW BASS PATTERNS FOR MORE VARIETY
+  groove: {
+    name: 'Groove',
+    pattern: [
+      { beat: 0, duration: 0.7, interval: 0 },
+      { beat: 0.75, duration: 0.7, interval: 7 },
+      { beat: 2, duration: 0.7, interval: 0 },
+      { beat: 2.75, duration: 0.7, interval: 5 }
+    ]
+  },
+  funky: {
+    name: 'Funky',
+    pattern: [
+      { beat: 0, duration: 0.5, interval: 0 },
+      { beat: 0.5, duration: 0.5, interval: 12 },
+      { beat: 1, duration: 0.5, interval: 7 },
+      { beat: 2, duration: 0.5, interval: 0 },
+      { beat: 2.5, duration: 0.5, interval: 5 },
+      { beat: 3, duration: 0.5, interval: 7 }
+    ]
+  },
+  slide: {
+    name: 'Slide Bass',
+    pattern: [
+      { beat: 0, duration: 1.5, interval: 0 },
+      { beat: 1.5, duration: 0.3, interval: 2 },
+      { beat: 2, duration: 1.5, interval: 7 },
+      { beat: 3.5, duration: 0.3, interval: 5 }
+    ]
+  },
+  minimal: {
+    name: 'Minimal',
+    pattern: [
+      { beat: 0, duration: 3.8, interval: 0 }
+    ]
+  },
+  rootThird: {
+    name: 'Root-Third',
+    pattern: [
+      { beat: 0, duration: 1.5, interval: 0 },
+      { beat: 2, duration: 1.5, interval: 4 }
+    ]
+  },
+  rolling: {
+    name: 'Rolling',
+    pattern: [
+      { beat: 0, duration: 0.8, interval: 0 },
+      { beat: 1, duration: 0.8, interval: 7 },
+      { beat: 2, duration: 0.8, interval: 5 },
+      { beat: 3, duration: 0.8, interval: 0 }
     ]
   }
 };
@@ -842,6 +965,24 @@ export const generateSongArrangement = (artistKey, transpose = 0) => {
   const totalBeats = totalBars * beatsPerBar;
   const durationSeconds = (totalBeats / tempo) * 60;
 
+  // RANDOMLY SELECT DRUM & BASS PATTERNS FOR MORE VARIETY!
+  const allDrumPatterns = Object.keys(DRUM_PATTERNS);
+  const allBassPatterns = Object.keys(BASS_PATTERNS);
+
+  // Intelligently pick drum pattern based on artist or random
+  let drumPatternKey = artist.drumPattern;
+  if (Math.random() > 0.5) {
+    // 50% chance to use a random drum pattern for variety
+    drumPatternKey = allDrumPatterns[Math.floor(Math.random() * allDrumPatterns.length)];
+  }
+
+  // Intelligently pick bass pattern or random
+  let bassPatternKey = artist.bassPattern;
+  if (Math.random() > 0.5) {
+    // 50% chance to use a random bass pattern for variety
+    bassPatternKey = allBassPatterns[Math.floor(Math.random() * allBassPatterns.length)];
+  }
+
   return {
     artist: artist.name,
     artistKey,
@@ -853,8 +994,10 @@ export const generateSongArrangement = (artistKey, transpose = 0) => {
     totalBeats,
     durationSeconds,
     durationFormatted: formatDuration(durationSeconds),
-    drumPattern: DRUM_PATTERNS[artist.drumPattern] || DRUM_PATTERNS.trapSoul,
-    bassPattern: BASS_PATTERNS[artist.bassPattern] || BASS_PATTERNS.rootFifth,
+    drumPattern: DRUM_PATTERNS[drumPatternKey] || DRUM_PATTERNS.trapSoul,
+    bassPattern: BASS_PATTERNS[bassPatternKey] || BASS_PATTERNS.rootFifth,
+    drumPatternName: DRUM_PATTERNS[drumPatternKey]?.name || 'Trap Soul',
+    bassPatternName: BASS_PATTERNS[bassPatternKey]?.name || 'Root-Fifth',
     style: artist.style_tags,
     aiHint: artist.aiHint,
     color: artist.color,
