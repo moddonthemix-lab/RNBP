@@ -1,7 +1,11 @@
 /**
  * R&B Song Structure & Artist Style Library
  * Based on Ultimate RnB & Blues Theory Guide + JSON Dataset
+ * ENHANCED WITH SCALE INTELLIGENCE & VARIATION SYSTEM
  */
+
+import { selectScaleForContext, getScaleMidi, SCALES } from './musicTheory';
+import { generateTrackVariation } from './variationEngine';
 
 export const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -791,24 +795,34 @@ export const transposeChord = (chord, semitones) => {
 export const generateSongArrangement = (artistKey, transpose = 0) => {
   const artist = ARTISTS[artistKey];
   if (!artist) return null;
-  
+
   const structure = SONG_STRUCTURES[artist.preferredStructure];
   const tempo = Math.floor(Math.random() * (artist.tempo.max - artist.tempo.min + 1)) + artist.tempo.min;
-  
+
+  // Generate unique variation for this track
+  const variation = generateTrackVariation();
+
+  // Select scales for this track based on artist style
+  const trackScales = {};
+
   const sections = structure.sections.map((sectionType, index) => {
     const sectionDef = SECTION_TYPES[sectionType];
     const artistSection = artist.sections[sectionType];
-    
+
     // Pick a random progression for this section
     const progressions = artistSection?.progressions || [artist.chordBank.slice(0, 4)];
     const progression = progressions[Math.floor(Math.random() * progressions.length)];
-    
+
+    // Select appropriate scale for this section
+    const selectedScale = selectScaleForContext(artist.style_tags, sectionType);
+    trackScales[sectionType] = selectedScale;
+
     // Build chords
     const chords = progression.map(name => {
       const chord = buildChord(name);
       return transposeChord(chord, transpose);
     });
-    
+
     return {
       type: sectionType,
       name: sectionDef.name,
@@ -816,16 +830,18 @@ export const generateSongArrangement = (artistKey, transpose = 0) => {
       energy: sectionDef.energy,
       description: sectionDef.description,
       chords,
-      progression
+      progression,
+      scale: selectedScale,
+      scaleInfo: SCALES[selectedScale]
     };
   });
-  
+
   // Calculate total duration
   const totalBars = sections.reduce((sum, s) => sum + s.bars, 0);
   const beatsPerBar = 4;
   const totalBeats = totalBars * beatsPerBar;
   const durationSeconds = (totalBeats / tempo) * 60;
-  
+
   return {
     artist: artist.name,
     artistKey,
@@ -841,7 +857,10 @@ export const generateSongArrangement = (artistKey, transpose = 0) => {
     bassPattern: BASS_PATTERNS[artist.bassPattern] || BASS_PATTERNS.rootFifth,
     style: artist.style_tags,
     aiHint: artist.aiHint,
-    color: artist.color
+    color: artist.color,
+    variation, // Include the variation
+    scales: trackScales, // Include selected scales
+    variationId: variation.id
   };
 };
 

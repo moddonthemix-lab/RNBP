@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import * as Tone from 'tone';
-import audioEngine from './audioEngine';
-import { 
+import audioEngineAdvanced from './audioEngineAdvanced';
+import {
   ARTISTS, SONG_STRUCTURES, DRUM_PATTERNS, BASS_PATTERNS, NOTES,
   generateSongArrangement, SECTION_TYPES
 } from './songStructure';
 import { createMidiFile, downloadMidi, generateMidiEvents } from './midiExport';
+import { SCALES } from './musicTheory';
 
 export default function App() {
   // Core state
@@ -54,12 +55,16 @@ export default function App() {
     generateNew();
   }, [selectedArtist, keyTranspose]);
 
+  // Sample loading state
+  const [loadedSamples, setLoadedSamples] = useState([]);
+  const [showSampleLoader, setShowSampleLoader] = useState(false);
+
   // Init audio
   const initAudio = async () => {
     if (audioReady) return true;
     setIsLoading(true);
     try {
-      await audioEngine.init();
+      await audioEngineAdvanced.init();
       setAudioReady(true);
       setIsLoading(false);
       return true;
@@ -70,6 +75,23 @@ export default function App() {
     }
   };
 
+  // Sample loading
+  const handleSampleUpload = useCallback(async (event, category = 'melody') => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+
+    setIsLoading(true);
+    try {
+      const sampleManager = audioEngineAdvanced.getSampleManager();
+      const loaded = await sampleManager.loadSamples(files, category);
+      setLoadedSamples(prev => [...prev, ...loaded]);
+      console.log(`✅ Loaded ${loaded.length} samples:`, loaded.map(s => s.name));
+    } catch (error) {
+      console.error('Sample loading error:', error);
+    }
+    setIsLoading(false);
+  }, []);
+
   // Stop playback
   const stopPlayback = useCallback(() => {
     if (playbackRef.current) {
@@ -78,7 +100,7 @@ export default function App() {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
     }
-    audioEngine.stopAll();
+    audioEngineAdvanced.stopAll();
     setIsPlaying(false);
     setCurrentSection(-1);
     setCurrentChord(-1);
@@ -98,9 +120,9 @@ export default function App() {
     
     setIsPlaying(true);
     setPlaybackTime(0);
-    
-    audioEngine.setReverb(reverbAmount);
-    audioEngine.setBPM(arrangement.tempo);
+
+    audioEngineAdvanced.setReverb(reverbAmount);
+    audioEngineAdvanced.setBPM(arrangement.tempo);
     
     // Flatten all chords with timing info
     const allEvents = [];
@@ -158,8 +180,8 @@ export default function App() {
       }
     };
     
-    // Start playback
-    const totalDuration = audioEngine.playArrangement(songArrangement, (chordIdx) => {
+    // Start playback with advanced engine
+    const totalDuration = audioEngineAdvanced.playArrangement(songArrangement, (chordIdx) => {
       if (chordIdx < allEvents.length) {
         const event = allEvents[chordIdx];
         setCurrentSection(event.sectionIdx);
@@ -295,12 +317,19 @@ export default function App() {
         {/* Header */}
         <header className="header">
           <h1>R&B Producer Pro</h1>
-          <p>Full Song Structures • Artist Styles • Professional Production</p>
-          
+          <p>Multi-Platinum Quality • 20+ Scales • Unique Variations • Custom Samples</p>
+
           {!audioReady && (
             <button className="btn-enable" onClick={initAudio} disabled={isLoading}>
               {isLoading ? 'Loading Instruments...' : '🎹 Enable Audio'}
             </button>
+          )}
+
+          {audioReady && arrangement && (
+            <div style={{ marginTop: '10px', fontSize: '0.85em', opacity: 0.8 }}>
+              Variation ID: #{arrangement.variationId?.toString().slice(0, 8)} •
+              {Object.keys(arrangement.scales || {}).length} Scales Active
+            </div>
           )}
         </header>
 
@@ -395,13 +424,43 @@ export default function App() {
           </div>
         </section>
 
+        {/* Sample Loader */}
+        <section className="panel">
+          <h3 className="label">Custom Samples ({loadedSamples.length} loaded)</h3>
+          <div className="sample-loader">
+            <input
+              type="file"
+              accept="audio/*"
+              multiple
+              onChange={(e) => handleSampleUpload(e, 'melody')}
+              style={{ display: 'none' }}
+              id="sample-upload"
+            />
+            <label htmlFor="sample-upload" className="btn-upload">
+              📁 Load Samples
+            </label>
+            {loadedSamples.length > 0 && (
+              <div className="sample-list">
+                {loadedSamples.slice(-5).map((sample, i) => (
+                  <span key={i} className="sample-chip">
+                    {sample.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+
         {/* Song Structure Visualization */}
         {arrangement && (
           <section className="panel song-panel">
             <div className="song-header">
               <h3 className="label">
-                {arrangement.artist} - {arrangement.structure} 
+                {arrangement.artist} - {arrangement.structure}
                 <span className="gen-badge">#{genCount}</span>
+                <span className="gen-badge" style={{ marginLeft: '5px' }}>
+                  🎼 {Object.keys(arrangement.scales || {}).length} Scales
+                </span>
               </h3>
               <button className="btn-regen" onClick={generateNew}>🎲 New Arrangement</button>
             </div>
@@ -447,10 +506,27 @@ export default function App() {
                   {arrangement.sections[currentSection >= 0 ? currentSection : 0].name}
                 </h4>
                 <p>{arrangement.sections[currentSection >= 0 ? currentSection : 0].description}</p>
-                
+
+                {/* Scale Info */}
+                {arrangement.sections[currentSection >= 0 ? currentSection : 0].scaleInfo && (
+                  <div className="scale-info" style={{
+                    padding: '8px 12px',
+                    background: 'rgba(139, 92, 246, 0.1)',
+                    borderRadius: '8px',
+                    marginBottom: '12px',
+                    fontSize: '0.9em'
+                  }}>
+                    <strong>🎼 Scale:</strong> {arrangement.sections[currentSection >= 0 ? currentSection : 0].scaleInfo.name}
+                    <br />
+                    <span style={{ opacity: 0.8 }}>
+                      {arrangement.sections[currentSection >= 0 ? currentSection : 0].scaleInfo.rnbUse}
+                    </span>
+                  </div>
+                )}
+
                 <div className="chord-display">
                   {arrangement.sections[currentSection >= 0 ? currentSection : 0].chords.map((chord, idx) => (
-                    <div 
+                    <div
                       key={idx}
                       className={`chord-card ${currentSection >= 0 && currentChord === idx ? 'active' : ''}`}
                       style={{ '--color': chord.color }}
@@ -482,11 +558,11 @@ export default function App() {
         {/* Full song structure breakdown */}
         {arrangement && (
           <section className="panel structure-panel">
-            <h3 className="label">Full Song Structure</h3>
+            <h3 className="label">Full Song Structure with Scales</h3>
             <div className="structure-timeline">
               {arrangement.sections.map((section, idx) => (
-                <div 
-                  key={idx} 
+                <div
+                  key={idx}
                   className={`structure-section ${currentSection === idx ? 'playing' : ''}`}
                   style={{ '--color': artist?.color }}
                 >
@@ -498,6 +574,15 @@ export default function App() {
                   <div className="section-chords">
                     {section.progression.join(' → ')}
                   </div>
+                  {section.scaleInfo && (
+                    <div className="section-scale" style={{
+                      fontSize: '0.8em',
+                      opacity: 0.7,
+                      marginTop: '4px'
+                    }}>
+                      🎼 {section.scaleInfo.name}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
